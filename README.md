@@ -20,8 +20,8 @@ The bulk of the analysis is conducted in Python using scikit-learn.
 Here is a list of which scripts are used for which steps of the analysis:
 
 * Preprocessing: *preprocessing.Rmd*
-* Summary Statistics: *blabla*
-* Factor analysis: *blabla*
+* Summary Statistics: *preprocessing.Rmd* and *group_summary_stats*
+* Factor analysis: *factor_analysis.Rmd*
 * Mapping differences between semantic landscapes of healthy individuals and individuals with depression/anxiety: *lexicon_analysis.Rmd*, *lexicon_analysis.ipynb*, and *lexicon_analysis_VIF.ipynb*
 * Using demonstratives to predict depression and anxiety: *words_as_predictors.Rmd*, *words_as_predictors.ipynb*, and *words_as_predictors_VIF_ipynb*
 * Miscellaneous: *misc.Rmd*
