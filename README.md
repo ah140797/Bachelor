@@ -11,7 +11,7 @@ The bulk of the analysis is conducted in Python using scikit-learn.
 ## Repository Structure
 
 * The project report can be found under the filename *blablabla*
-* Code is done in both R and Python and can be found in the folder *Code/*
+* Code can be found in the folder *Code/*
 * Figures can be found in *Code/figures/*
 * Data can be found in *Code/Data/*
 
@@ -19,7 +19,7 @@ The bulk of the analysis is conducted in Python using scikit-learn.
 
 Here is a list of which scripts are used for which steps of the analysis:
 
-* Preprocessing: *preprocessing.Rmd'
+* Preprocessing: *preprocessing.Rmd*
 * Summary Statistics: *blabla*
 * Factor analysis: *blabla*
 * Mapping differences between semantic landscapes of healthy individuals and individuals with depression/anxiety: *lexicon_analysis.Rmd*, *lexicon_analysis.ipynb*, and *lexicon_analysis_VIF.ipynb*
