@@ -1,0 +1,939 @@
+---
+title: "lexicon_analysis"
+author: "Anders Hjulmand"
+date: '2022-09-03'
+output: html_document
+---
+
+We load Libraries
+```{r}
+pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx, lme4, textdata, textstem, geomtextpath, ggcorrplot)
+```
+
+We define a color palette for plots
+```{r}
+color_palette <- c(wes_palette("Darjeeling1")[2], wes_palette("Darjeeling1")[3])
+```
+
+And load data:
+```{r}
+data_long <- read_csv("Data/data_long.csv") %>% 
+  rename('Valence_VAD' = 'Valence.x',
+         'Arousal_VAD' = 'Arousal.x',
+         'Dominance_VAD' = 'Dominance'
+         ) %>% 
+  mutate(Dem = as.factor(Dem),
+         Depressed = as.factor(Depressed),
+         Anxiety = as.factor(Anxiety),
+         Dem = fct_relevel(Dem, 'this', 'that'),
+         Depressed = fct_relevel(Depressed, '0', '1'),
+         Anxiety = fct_relevel(Anxiety, '0', '1'))
+
+#targets <- read_csv("Data/target.csv") %>% 
+  #select(ID, F1, F2, F1_transformed, F2_transformed, Depressed_F1, Anxiety_F2)
+
+#data_long <- left_join(data_long,
+#                       targets,
+#                       by = 'ID'
+#) %>% 
+#  mutate(Dem = as.factor(Dem),
+#         Depressed_F1 = as.factor(Depressed_F1),
+#         Anxiety_F2 = as.factor(Anxiety_F2),
+#         Dem = fct_relevel(Dem, 'this', 'that'),
+#         Depressed_F1 = fct_relevel(Depressed_F1, '0', '1'),
+#         Anxiety_F2 = fct_relevel(Anxiety_F2, '0', '1'))
+```
+
+
+# Data Wrangling
+
+Here we make the target values: the difference in proportion proximal demonstrative between patients and non-patients for each word.
+
+## Depressed/Non-depressed
+```{r}
+#each group answered the same words
+#divide each participant into depressed/non-depressed
+#for each participant for each word, measure proportion this/that 
+```
+
+```{r}
+#depressed non depressed
+data_long %>% 
+  group_by(Depressed) %>% 
+  tally()
+```
+
+```{r}
+#count of this that for each word between depressed/non-depressed
+te <- data_long %>% 
+  filter(Depressed == 0 | Depressed == 1) %>% 
+  group_by(Word, Depressed, Dem) %>% 
+  tally()
+
+
+te %>% 
+  ggplot() +
+  aes(x=n, fill=Dem) + 
+  geom_density(alpha = 0.5) + 
+  theme_minimal() +
+  facet_wrap(~Depressed)
+
+#hvad viser den her egentlig? 
+
+te %>% 
+  ggplot() + 
+  aes(x=n, fill = Depressed) + 
+  geom_density(alpha = 0.8) + 
+  theme_minimal()
+```
+
+
+```{r}
+#proprotion of this/that for depressed/non-depressed for each word
+word_depr_proportion <- tibble()
+
+i = 1
+for (row in seq(1, by=2, len=(length(unique(te$Word))*2))) {
+    prop = te$n[row]/(te$n[row]+te$n[row+1]) 
+    output = c(as.character(te$Word[row]), as.character(te$Depressed[row]), prop)
+    word_depr_proportion <- rbind(word_depr_proportion, output)
+    i = i + 1
+}
+
+word_depr_proportion <- word_depr_proportion %>% 
+  rename('Word' = colnames(word_depr_proportion[1]),
+         'Depressed' = colnames(word_depr_proportion[2]),
+         'Proportion' = colnames(word_depr_proportion[3])) %>% 
+  mutate(#Word = as.factor(Word),
+         #Depressed_F1 = as.factor(Depressed_F1),
+         Proportion = as.numeric(Proportion))
+
+word_depr_proportion %>% 
+  ggplot() +
+  aes(x=Proportion, fill = Depressed) + 
+  geom_density(alpha = 0.5) + 
+  theme_minimal()
+```
+
+
+```{r}
+#difference proportion this/that for depressed/non-depressed for each word
+word_depr_diff <- tibble()
+
+i = 1
+for (row in seq(1, by=2, len=length(unique(te$Word)))) {
+    diff = word_depr_proportion$Proportion[row]-word_depr_proportion$Proportion[row+1] 
+    output = c(as.character(word_depr_proportion$Word[row]), diff)
+    word_depr_diff <- rbind(word_depr_diff, output)
+    i = i + 1
+}
+
+word_depr_diff <- word_depr_diff %>% 
+  rename('Word' = colnames(word_depr_diff[1]),
+         'proportion_diff_depr' = colnames(word_depr_diff[2])) %>% 
+  mutate(Word = as.factor(Word),
+         proportion_diff_depr = as.numeric(proportion_diff_depr))
+
+word_depr_diff %>% 
+  ggplot() + 
+  aes(x=proportion_diff_depr) + 
+  geom_density() + 
+  theme_minimal()
+
+#describe(word_depr_diff$proportion_diff_depr)
+```
+
+## Anxiety/Non-Anxiety
+
+```{r}
+#anxiety/no-anxiety
+data_long %>% 
+  group_by(Anxiety) %>% 
+  tally()
+```
+
+```{r}
+#count of this that for each word between anxiety/no-anxiety
+te <- data_long %>% 
+  filter(Anxiety == 0 | Anxiety == 1) %>% 
+  group_by(Word, Anxiety, Dem) %>% 
+  tally()
+
+
+te %>% 
+  ggplot() +
+  aes(x=n, fill=Dem) + 
+  geom_density(alpha = 0.5) + 
+  theme_minimal() +
+  facet_wrap(~Anxiety)
+
+#hvad viser den her egentlig? 
+
+te %>% 
+  ggplot() + 
+  aes(x=n, fill = Anxiety) + 
+  geom_density(alpha = 0.8) + 
+  theme_minimal()
+  
+```
+
+```{r}
+#proprotion of this/that for anxiety/no-anxiety for each word
+word_anx_proportion <- tibble()
+
+i = 1
+for (row in seq(1, by=2, len=(length(unique(te$Word))*2))) {
+    prop = te$n[row]/(te$n[row]+te$n[row+1]) 
+    output = c(as.character(te$Word[row]), as.character(te$Anxiety[row]), prop)
+    word_anx_proportion <- rbind(word_anx_proportion, output)
+    i = i + 1
+}
+
+word_anx_proportion <- word_anx_proportion %>% 
+  rename('Word' = colnames(word_anx_proportion[1]),
+         'Anxiety' = colnames(word_anx_proportion[2]),
+         'Proportion' = colnames(word_anx_proportion[3])) %>% 
+  mutate(#Word = as.factor(Word),
+         #Anxiety = as.factor(Anxiety),
+         Proportion = as.numeric(Proportion))
+
+word_anx_proportion %>% 
+  ggplot() +
+  aes(x=Proportion, fill = Anxiety) + 
+  geom_density(alpha = 0.5) + 
+  theme_minimal()
+```
+
+
+```{r}
+#difference proportion this/that for anxiety/no-anxiety for each word
+word_anx_diff <- tibble()
+
+i = 1
+for (row in seq(1, by=2, len=length(unique(te$Word)))) {
+    diff = word_anx_proportion$Proportion[row]-word_anx_proportion$Proportion[row+1] 
+    output = c(as.character(word_anx_proportion$Word[row]), diff)
+    word_anx_diff <- rbind(word_anx_diff, output)
+    i = i + 1
+}
+
+word_anx_diff <- word_anx_diff %>% 
+  rename('Word' = colnames(word_anx_diff[1]),
+         'proportion_diff_anx' = colnames(word_anx_diff[2])) %>% 
+  mutate(Word = as.factor(Word),
+         proportion_diff_anx = as.numeric(proportion_diff_anx))
+
+word_anx_diff %>% 
+  ggplot() + 
+  aes(x=proportion_diff_anx) + 
+  geom_density() + 
+  theme_minimal()
+
+#describe(word_anx_diff$proportion_diff_anx)
+```
+
+
+## Merging with VAD and NRC emotion
+
+Merge with VAD dataset for both depression and anxiety.
+```{r}
+#for depression
+word_diff_VAD <- left_join(
+  word_depr_diff,
+  data_long[, c('Word', 'Valence_VAD', 'Arousal_VAD', 'Dominance_VAD')],
+  by = 'Word'
+) %>% distinct()
+
+# see which words are not in the VAD dataset
+py <- word_diff_VAD %>% 
+  filter(is.na(Valence_VAD))
+
+#filter words in our dataset that is not in the VAD dataset (17 Words)
+word_diff_VAD <- word_diff_VAD %>% 
+  filter(!(Word %in% py$Word))
+
+#Lastly we add anxiety proportion diff
+word_diff_VAD <- left_join(
+  word_diff_VAD,
+  word_anx_diff,
+  by = 'Word'
+)
+word_diff_VAD <- word_diff_VAD  %>% relocate(Word, proportion_diff_depr, proportion_diff_anx)
+```
+
+Merge with NRC emotion lexicon (binary lexicon)
+```{r}
+#for depression
+word_diff_emotion <- left_join(
+  word_depr_diff,
+  data_long[, c('Word', 'anger', 'anticipation', 'disgust', 'fear', 'joy', 'negative', 'positive', 'sadness', 'surprise', 'trust')],
+  by = 'Word'
+) %>% distinct()
+
+# see which words are not in the emotion dataset
+py <- word_diff_emotion %>% 
+  filter(is.na(anger))
+
+#filter words in our dataset that is not in the emotion dataset (93 words)
+word_diff_emotion <- word_diff_emotion %>% 
+  filter(!(Word %in% py$Word))
+
+#Lastly we add anxiety proportion diff
+word_diff_emotion <- left_join(
+  word_diff_emotion,
+  word_anx_diff,
+  by = 'Word'
+)
+word_diff_emotion <- word_diff_emotion  %>% relocate(Word, proportion_diff_depr, proportion_diff_anx)
+```
+
+Lastly we add group number to both lexicons and save them
+```{r}
+word_diff_VAD <- left_join(word_diff_VAD,
+                           data_long %>% select(Word, Group) %>% distinct(),
+                           by = 'Word') %>% relocate(Word, Group)
+
+word_diff_emotion <- left_join(word_diff_emotion,
+                           data_long %>% select(Word, Group) %>% distinct(),
+                           by = 'Word') %>% relocate(Word, Group)
+
+
+#write.csv(word_diff_VAD, 'Data/lexicon_analysis/word_diff_VAD_raw_scores.csv')
+#write.csv(word_diff_emotion, 'Data/lexicon_analysis/word_diff_emotion_raw_scores.csv')
+```
+
+
+# Python code
+
+------------------------Python code------------------------
+running python code from script lexicon_analysis.ipynb
+----------------------------------------------------------- 
+
+
+#Loading Datasets
+```{r}
+word_diff_VAD <- read_csv('Data/lexicon_analysis/word_diff_VAD_raw_scores.csv')
+word_diff_emotion <- read_csv('Data/lexicon_analysis/word_diff_emotion_raw_scores.csv')
+word_diff_combined <- read_csv('Data/lexicon_analysis/word_diff_combined_raw_scores.csv')
+```
+
+
+
+# Analysis for VAD
+```{r}
+de <- word_diff_VAD %>% 
+  gather(c(6,7,8),
+         key = 'dimension',
+         value = 'value') %>% 
+  ggplot() + 
+  aes(x=value, y=proportion_diff_depr) + 
+  geom_point(aes(color = dimension)) + 
+  stat_smooth(method = 'lm',
+              color = 'black',
+              size = 0.7) +
+  facet_wrap(~dimension) + 
+  theme_minimal() + 
+  theme(legend.position = 'none') + 
+  labs(title= 'Depression')
+
+an <- word_diff_VAD %>% 
+  gather(c(6,7,8),
+         key = 'dimension',
+         value = 'value') %>% 
+  ggplot() + 
+  aes(x=value, y=proportion_diff_anx) + 
+  geom_point(aes(color = dimension)) + 
+  stat_smooth(method = 'lm',
+              color = 'black',
+              size = 0.7) +
+  facet_wrap(~dimension) + 
+  theme_minimal() + 
+  theme(legend.position = 'none') + 
+  labs(title= 'Anxiety')
+
+de/an
+```
+
+
+## Checking colinearity
+```{r}
+#compute correlation matrix
+corr <- round(cor(word_diff_VAD[6:8]), 2)
+
+# Compute a matrix of correlation p-values
+p_values <- cor_pmat(word_diff_VAD[6:8])
+
+ggcorrplot(corr,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           colors = c("#6D9EC1", "white", "#E46726"),
+           lab = TRUE,
+            p.mat = p_values)
+
+
+#make the partial correlation matrix for depression
+hep <- round(partial.r(data = word_diff_VAD,
+                 x = c(6,7,8),
+                 y = 4, 
+                 method = 'pearson'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_depr <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of NRCVAD with target Depression')
+           
+#make the partial correlation matrix for anxiety
+hep <- round(partial.r(data = word_diff_VAD,
+                 x = c(6,7,8),
+                 y = 5, 
+                 method = 'pearson'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_anx <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of NRCVAD with target Anxiety')
+           
+plot_depr
+plot_anx
+
+s
+
+```
+
+# Analysis for emotion lexicon
+
+```{r}
+word_diff_emotion %>% 
+  gather(c(6:15),
+         key = 'dimension',
+         value = 'high_low' 
+         ) %>% 
+  mutate(high_low = as.factor(high_low),
+         high_low = recode(high_low, '1' = "High", '0' = "Low")) %>% 
+  ggplot() + 
+  aes(x=proportion_diff_depr, fill= high_low, label = high_low) + 
+  #geom_textdensity(size = 4, fontface = 2, hjust = 0.2, vjust = 0.3) + 
+  geom_density(alpha = 0.4) + 
+  theme_minimal()+ 
+  theme(legend.position = 'bottom') +
+  xlim(-0.3,0.3) +
+  facet_wrap(~dimension, ncol=2)
+
+word_diff_emotion %>% 
+  gather(c(6:15),
+         key = 'dimension',
+         value = 'high_low' 
+         ) %>% 
+  mutate(high_low = as.factor(high_low),
+         high_low = recode(high_low, '1' = "High", '0' = "Low")) %>% 
+  ggplot() + 
+  aes(x=proportion_diff_anx, fill= high_low, label = high_low) + 
+  #geom_textdensity(size = 4, fontface = 2, hjust = 0.2, vjust = 0.3) + 
+  geom_density(alpha = 0.4) + 
+  theme_minimal()+ 
+  xlim(-0.3,0.3) +
+  theme(legend.position = 'bottom') +
+  facet_wrap(~dimension, ncol=2)
+```
+
+
+## Checking colinearity
+```{r}
+#compute correlation matrix
+word_diff_emotion <- word_diff_emotion %>% mutate_at(c(5:14), as.numeric)
+
+corr <- round(cor(word_diff_emotion[6:15]), 2)
+
+# Compute a matrix of correlation p-values
+p_values <- cor_pmat(word_diff_emotion[6:15])
+
+ggcorrplot(corr,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           colors = c("#6D9EC1", "white", "#E46726"),
+           lab = TRUE)
+
+
+#make the partial correlation matrix for depression
+hep <- round(partial.r(data = word_diff_emotion,
+                 x = c(6:15),
+                 y = 4, 
+                 method = 'kendall'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_depr <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of emotion lexicon with target Depression')
+           
+#make the partial correlation matrix for anxiety
+hep <- round(partial.r(data = word_diff_emotion,
+                 x = c(6:15),
+                 y = 5, 
+                 method = 'kendall'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_anx <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of emotion lexicon with target Anxiety')
+           
+plot_depr
+plot_anx
+
+```
+# Analysis for combined lexicon of NRCVAD and Emotion Lexicon
+
+```{r}
+#word_diff_combined <- left_join(word_diff_emotion,
+#                                word_diff_VAD %>% select(-c(proportion_diff_anx,proportion_diff_depr, Group)),
+#                                by = 'Word')
+
+# Here we dont lose more words than in the emotion lexicon
+#write.csv(word_diff_combined, 'Data/lexicon_analysis/word_diff_combined_raw_scores.csv')
+```
+
+## Combined partial correlation matrix
+
+We remove positive and negative from the emotion lexicon, since they are already expressed in Valence from VAD.
+```{r}
+#compute correlation matrix
+word_diff_combined <- word_diff_combined %>% 
+  mutate_at(c(6:18), as.numeric)# %>% 
+  #select(-c('positive', 'negative'))
+
+corr <- round(cor(word_diff_combined[6:18]), 2)
+
+# Compute a matrix of correlation p-values
+p_values <- cor_pmat(word_diff_combined[6:18])
+
+ggcorrplot(corr,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           colors = c("#6D9EC1", "white", "#E46726"),
+           lab = TRUE)
+
+
+#make the partial correlation matrix for depression
+hep <- round(partial.r(data = word_diff_combined,
+                 x = c(6:18),
+                 y = 4, 
+                 method = 'kendall'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_depr <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of combined lexicon with target Depression')
+           
+#make the partial correlation matrix for anxiety
+hep <- round(partial.r(data = word_diff_combined,
+                 x = c(6:18),
+                 y = 5, 
+                 method = 'kendall'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_anx <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of combined lexicon with target Anxiety')
+           
+plot_depr
+plot_anx
+```
+
+# Results
+
+## VAD
+```{r}
+VAD_results <- read_csv('Data/lexicon_analysis_performance/VAD_raw_scores.csv')
+```
+
+The we load the training and holdout datasets for plotting:
+```{r}
+VAD_X_train <- read_csv('Data/lexicon_analysis_performance/VAD_raw_scores_X_train.csv')
+VAD_X_holdout <- read_csv('Data/lexicon_analysis_performance/VAD_raw_scores_X_holdout.csv')
+VAD_y_train <- read_csv('Data/lexicon_analysis_performance/VAD_raw_scores_y_train.csv')
+VAD_y_holdout <- read_csv('Data/lexicon_analysis_performance/VAD_raw_scores_y_holdout.csv')
+
+VAD_train <- left_join(VAD_X_train, VAD_y_train)
+VAD_holdout <- left_join(VAD_X_holdout, VAD_y_holdout)
+```
+
+Unpack predictions
+```{r}
+#for vad depression
+VAD_depr_y_pred <- VAD_results$predicted_values[1] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+VAD_depr_y_pred <- gsub('\\[', '', VAD_depr_y_pred)
+VAD_depr_y_pred <- gsub('\\]', '', VAD_depr_y_pred)
+VAD_depr_y_pred <- as.numeric(str_split(VAD_depr_y_pred, ',')[[1]])
+
+#for vad anxiety
+VAD_anx_y_pred <- VAD_results$predicted_values[2] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+VAD_anx_y_pred <- gsub('\\[', '', VAD_anx_y_pred)
+VAD_anx_y_pred <- gsub('\\]', '', VAD_anx_y_pred)
+VAD_anx_y_pred <- as.numeric(str_split(VAD_anx_y_pred, ',')[[1]])
+
+VAD_holdout <- VAD_holdout %>% 
+  mutate(proportion_diff_depr_pred = VAD_depr_y_pred,
+         proportion_diff_anx_pred = VAD_anx_y_pred)
+
+```
+
+
+Make plots
+```{r}
+VAD_holdout %>% 
+  ggplot() + 
+  aes(x=proportion_diff_depr_pred, y=proportion_diff_depr) +
+  stat_smooth(method='lm') +
+  geom_point() + 
+  theme_minimal() 
+
+VAD_holdout %>% 
+  ggplot() + 
+  aes(x=proportion_diff_anx_pred, y=proportion_diff_anx) +
+  geom_point() + 
+  stat_smooth(method='lm') +
+  theme_minimal()
+```
+
+## Emotion
+```{r}
+emotion_results <- read_csv('Data/lexicon_analysis_performance/emotion_raw_scores_negposremoved.csv')
+```
+
+The we load the training and holdout datasets for plotting:
+```{r}
+emotion_X_train <- read_csv('Data/lexicon_analysis_performance/emotion_raw_scores_X_train.csv')
+emotion_X_holdout <- read_csv('Data/lexicon_analysis_performance/emotion_raw_scores_X_holdout.csv')
+emotion_y_train <- read_csv('Data/lexicon_analysis_performance/emotion_raw_scores_y_train.csv')
+emotion_y_holdout <- read_csv('Data/lexicon_analysis_performance/emotion_raw_scores_y_holdout.csv')
+
+emotion_train <- left_join(emotion_X_train, emotion_y_train)
+emotion_holdout <- left_join(emotion_X_holdout, emotion_y_holdout)
+```
+
+Unpack predictions
+```{r}
+#for emotion depression
+emotion_depr_y_pred <- emotion_results$predicted_values[1] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all('[\n]', '')
+emotion_depr_y_pred <- gsub('\\[,', '', emotion_depr_y_pred)
+emotion_depr_y_pred <- gsub('\\[', '', emotion_depr_y_pred)
+emotion_depr_y_pred <- gsub('\\,]', '', emotion_depr_y_pred)
+emotion_depr_y_pred <- as.numeric(str_split(emotion_depr_y_pred, ',')[[1]])
+
+#for emotion anxiety
+emotion_anx_y_pred <- emotion_results$predicted_values[2] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all('[\n]', '')
+emotion_anx_y_pred <- gsub('\\[,', '', emotion_anx_y_pred)
+emotion_anx_y_pred <- gsub('\\,]', '', emotion_anx_y_pred)
+emotion_anx_y_pred <- as.numeric(str_split(emotion_anx_y_pred, ',')[[1]])
+
+emotion_holdout <- emotion_holdout %>% 
+  mutate(proportion_diff_depr_pred = emotion_depr_y_pred,
+         proportion_diff_anx_pred = emotion_anx_y_pred)
+
+```
+
+
+Make plots
+```{r}
+emotion_holdout %>% 
+  ggplot() + 
+  aes(x=proportion_diff_depr_pred, y=proportion_diff_depr) +
+  geom_point() + 
+  theme_minimal() 
+
+emotion_holdout %>% 
+  ggplot() + 
+  aes(x=proportion_diff_anx_pred, y=proportion_diff_anx) +
+  geom_point() + 
+  theme_minimal()
+```
+
+## Checking colinearity
+```{r}
+#compute correlation matrix
+word_diff_emotion <- word_diff_emotion %>% mutate_at(c(5:14), as.numeric)
+
+corr <- round(cor(word_diff_emotion[c('anticipation','sadness','disgust')]), 2)
+
+# Compute a matrix of correlation p-values
+#p_values <- cor_pmat(word_diff_emotion[6:15])
+
+ggcorrplot(corr,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           colors = c("#6D9EC1", "white", "#E46726"),
+           lab = TRUE)
+
+
+#make the partial correlation matrix for depression
+hep <- round(partial.r(data = word_diff_emotion,
+                 x = c('anticipation','sadness','disgust'),
+                 y = 4, 
+                 method = 'kendall'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_depr <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of emotion lexicon with target Depression')
+           
+#make the partial correlation matrix for anxiety
+hep <- round(partial.r(data = word_diff_emotion,
+                 x = c('anticipation','sadness','disgust'),
+                 y = 5, 
+                 method = 'kendall'
+                 )
+             ,2)
+
+#making the correlation plot
+plot_anx <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           colors = c("#6D9EC1", "white", "#E46726")) + labs(title = 'Partial Correlation of emotion lexicon with target Anxiety')
+           
+plot_depr
+
+plot_anx
+
+```
+
+## Feature Importance
+
+We manually make a dataframe for Depression and anxiety
+```{r}
+depr_feature_importance <- tibble(
+  'feature_name' = c('Valence', 'Fear'),
+  'feature_importance_train' = c(0.149, 0.0814),
+  'feature_importance_holdout' = c(0.177, 0.0801),
+  'std_train' = c(0.0322, 0.028),
+  'std_holdout' = c(0.0405, 0.0281),
+  'direction' = c('positive', 'negative')
+)
+
+anx_feature_importance <- tibble(
+  'feature_name' = c('Valence', 'Anticipation', 'Disgust', 'Sadness'),
+  'feature_importance_train' = c(0.102, 0.0203, 0.0700, 0.0504),
+  'feature_importance_holdout' = c(0.144, -0.0301, 0.0600, 0.0519),
+  'std_train' = c(0.0274, 0.0117, 0.0212, 0.0202),
+  'std_holdout' = c(0.0319, 0.0128, 0.0250, 0.0222),
+  'direction' = c('positive', 'negative', 'negative', 'negative')
+)
+```
+
+## Plots
+
+```{r}
+depr_train <- depr_feature_importance %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_importance_train), y = feature_importance_train) +
+  geom_bar(aes(fill = direction), stat = 'identity', width = 0.5) +
+  geom_errorbar(aes(ymin=feature_importance_train-std_train, ymax=feature_importance_train+std_train), width=.15) +
+  scale_fill_manual(values = color_palette) +
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (R2)') +
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) + 
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
+  scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
+                     limits = c(0, 0.22))
+
+depr_holdout <- depr_feature_importance %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_importance_holdout), y = feature_importance_holdout) +
+  geom_bar(aes(fill = direction), stat = 'identity', width = 0.5) +
+  geom_errorbar(aes(ymin=feature_importance_holdout-std_holdout, ymax=feature_importance_holdout+std_holdout), width=.15) +
+  scale_fill_manual(values = color_palette) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (R2)') +
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) +  
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) +
+  scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
+                     limits = c(0, 0.22))# +
+  #theme(axis.title.y=element_blank(),
+  #      axis.text.y=element_blank(),
+  #      axis.ticks.y=element_blank())
+
+anx_train <-anx_feature_importance %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_importance_train), y = feature_importance_train) +
+  geom_bar(aes(fill = direction), stat = 'identity') +
+  geom_errorbar(aes(ymin=feature_importance_train-std_train, ymax=feature_importance_train+std_train), width=.15,
+                 position=position_dodge(.9)) +
+  scale_fill_manual(values = color_palette) +
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (R2)') +
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) +  
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
+  scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
+                     limits = c(-0.05, 0.22))
+
+anx_holdout <-anx_feature_importance %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_importance_holdout), y = feature_importance_holdout) + 
+  geom_bar(aes(fill = direction), stat = 'identity') +
+  geom_errorbar(aes(ymin=feature_importance_holdout-std_holdout, ymax=feature_importance_holdout+std_holdout), width=.15,
+                 position=position_dodge(.9)) +
+  scale_fill_manual(values = color_palette) +
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (R2)') +
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) + 
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) +
+  scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
+                     limits = c(-0.05, 0.22))# +
+  #theme(axis.title.y=element_blank(),
+  #      axis.text.y=element_blank(),
+  #      axis.ticks.y=element_blank())
+
+#png('figures/lexicon_analysis/feature_importance_depr.png', width = 15, height = 10, units = 'in', res = 300)
+#depr_train + depr_holdout  + plot_annotation(
+#  title = 'a) Depression',
+#  subtitle = '') & theme(plot.title = element_text(size = 18))
+#dev.off()
+
+#png('figures/lexicon_analysis/feature_importance_anx.png', width = 15, height = 10, units = 'in', res = 300)
+#anx_train + anx_holdout  + plot_annotation(
+#  title = 'b) Anxiety',
+#  subtitle = '') & theme(plot.title = element_text(size = 18))
+#dev.off()
+
+
+png('figures/lexicon_analysis/feature_importance_depr_train.png', width = 10, height = 10, units = 'in', res = 300)
+depr_train
+dev.off()
+
+png('figures/lexicon_analysis/feature_importance_depr_holdout.png', width = 10, height = 10, units = 'in', res = 300)
+depr_holdout
+dev.off()
+
+png('figures/lexicon_analysis/feature_importance_anx_train.png', width = 10, height = 10, units = 'in', res = 300)
+anx_train
+dev.off()
+
+png('figures/lexicon_analysis/feature_importance_anx_holdout.png', width = 10, height = 10, units = 'in', res = 300)
+anx_holdout
+dev.off()
+```
+
+
+
+## General table
+```{r, eval = F}
+
+models_emotion <- tibble(
+  var_name_1 = character(),
+  var_name_2 = character(),
+  var_name_3 = numeric(),
+)
+
+for (outcome in colnames(word_diff_emotion)[c(2,13)]){
+  
+  for (predictor in list(colnames(word_diff_emotion)[3:12])) {
+    
+    #predictor = as.factor(predictor)
+    #outcome = as.factor(outcome)
+    
+    model <- lm(paste('proportion_diff_depr',  '~', predictor), data = word_diff_emotion)
+    output <- c(summary(model)$r.squared)
+    models_emotion <- rbind(outcome, 'proportion_diff_depr', output)
+  }
+}
+
+for(i in 2:ncol(data)) {                 # Head of for-loop
+ 
+  predictors_i <- colnames(data)[2:i]    # Create vector of predictor names
+  mod_summaries[[i - 1]] <- summary(     # Store regression model summary in list
+    lm(y ~ ., data[ , c("y", predictors_i)]))
+ 
+}
+
+summary(ea10)$coefficients
+summary(ea10)$r.squared
+summary(ea10)$adj.r.squared
+
+
+word_anx_diff <- tibble()
+
+i = 1
+for (row in seq(1, by=2, len=length(unique(te$Word)))) {
+    diff = word_anx_proportion$Proportion[row]-word_anx_proportion$Proportion[row+1] 
+    output = c(as.character(word_anx_proportion$Word[row]), diff)
+    word_anx_diff <- rbind(word_anx_diff, output)
+    i = i + 1
+}
+
+
+```
+
+
+
+
+
+

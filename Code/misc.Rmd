@@ -1,0 +1,79 @@
+---
+title: "misc"
+author: "Anders Hjulmand"
+date: "2022-11-07"
+output: html_document
+---
+
+We load Libraries
+```{r}
+pacman::p_load(tidyverse, wesanderson, patchwork, ggcorrplot, tidytext, kableExtra, see, correlation, psych, ggridges, sjmisc, mctest, grid, flextable)
+```
+
+# Tables of all words
+
+Load data
+```{r}
+data_long <- read_csv('Data/data_long.csv') %>% select(Group, Word) %>% distinct()
+features_df <- read_csv('Data/features_df.csv')
+```
+
+
+```{r}
+for (target_n in c('Depression', 'Anxiety')){
+  
+for (group_nr in seq(1,8,1)){
+  group_name = paste('Group', group_nr)
+  
+  #choosing words from significant models in train and holdout
+  fn_train <- features_df %>% 
+    filter(group == group_name) %>%
+    filter(target == target_n) %>% 
+    select(feature_name)
+  
+  fn_holdout <- features_df %>% 
+    filter(group == group_name) %>%
+    filter(target == target_n) %>% 
+    filter(permutation_pvalue_holdout_manual < 0.05) %>% 
+    select(feature_name)
+  
+  #making a color_code column based on the the significant of the word 
+  d <- data_long %>% 
+  filter(Group == group_nr) %>% 
+  select(Word) %>%  
+  mutate(color_code = case_when(Word %in% fn_holdout$feature_name ~ 'yellow',
+                                Word %in% fn_train$feature_name ~ 'red',
+                                TRUE ~ 'black'))
+  
+  #making the table  
+  t <- flextable(d) %>% 
+  add_header_lines(values = paste(group_name,'\n', target_n)) %>% 
+  fontsize(part = 'header', i=1, size=20) %>% 
+  fontsize(part = 'body', size = 24) %>% 
+  #choosing color   
+  bg(i = ~ d$color_code == 'red', j = names(d), bg = wes_palette('GrandBudapest1')[[1]]) %>% 
+  bg(i = ~ d$color_code == 'yellow', j = names(d), bg = wes_palette('GrandBudapest1')[[4]]) %>% 
+  theme_vanilla()
+  #saving
+  save_as_image(t, path = paste0('figures/all_words/',group_nr, target_n, '.png'), webshot = 'webshot')
+    
+  print(t)
+}
+}
+```
+
+```{r}
+  if (d$color_code == 'red'){
+    t <- color(t, color = 'red', part = 'body')
+   
+  } else if (d$color_code == 'blue'){
+    t <- color(t, color = 'blue', part = 'body')
+  } else{t <- color(t, color = 'black', part = 'body')}
+
+  case_when(d$color_code == 'red' ~ color(t, color = 'red', part = 'body'),
+            d$color_code == 'blue' ~ color(t, color = 'blue', part = 'body'),
+            d$color_code == 'black' ~ color(t, color = 'black', part = 'body'))
+```
+
+
+

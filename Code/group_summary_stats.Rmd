@@ -1,0 +1,215 @@
+---
+title: "group_analysis"
+author: "Anders Hjulmand"
+date: '2022-09-02'
+output: html_document
+---
+
+We load Libraries
+```{r}
+pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx, lme4, textdata, textstem)
+```
+
+We define a color palette for plots
+```{r}
+color_palette <- c(wes_palette("Chevalier1")[1], wes_palette("Darjeeling2")[2])
+```
+
+And load data:
+```{r}
+#data_long <- read_csv("Data/data_long.csv")
+```
+
+
+## Summary Stats
+
+```{r}
+head(data_long)
+```
+
+Summary stats for groups and words. 
+```{r}
+#total number of participants in each group
+groups_summary <- data_long %>% 
+  group_by(Group) %>% 
+  summarise(n = length(unique(ID)))
+
+#describe(groups_summary$n)
+
+groups_summary %>% 
+  ggplot() + 
+  aes(x=Group, y=n) + 
+  geom_col()
+
+#total number of words in each group
+total_words_summary <- data_long %>% 
+  group_by(Group) %>% 
+  tally()
+
+total_words_summary %>% 
+  ggplot() + 
+  aes(x=Group, y = n) +
+  geom_col()
+
+#there is about ~22000 word rating in total per group.
+
+```
+
+## Checking distributions in groups
+
+### Gender and Age
+
+```{r}
+data_long %>% 
+  ggplot() + 
+  aes(y = (..count..)/sum(..count..)) +
+  aes(x=Gender) + 
+  geom_bar() + 
+  scale_y_continuous(labels = scales::percent) +
+  labs(x="none", y="Percentage", title="Gender Distribution across groups") + 
+  theme_minimal() + 
+  facet_wrap(~Group)
+  
+```
+```{r}
+data_long %>% 
+  ggplot() + 
+  aes(y = (..count..)/sum(..count..)) +
+  aes(x=Age) + 
+  geom_bar() + 
+  scale_y_continuous(labels = scales::percent) +
+  labs(x="none", y="Percentage", title="Age Distribution across groups") + 
+  theme_minimal() + 
+  facet_wrap(~Group)
+```
+
+### Depression and anxiety
+
+
+```{r}
+data_long %>% 
+  ggplot() + 
+  aes(x = factor(PHQ9)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  geom_vline(xintercept = mean(data_depr_anx$PHQ9)) + 
+  theme_minimal() +
+  labs(x="PHQ9", y="Percentage", title="Depression Score across groups") + 
+  scale_y_continuous(labels = scales::percent) + 
+  facet_wrap(~Group)
+```
+
+
+```{r}
+data_long %>% 
+  ggplot() + 
+  aes(x = factor(GAD7)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) + 
+  geom_vline(xintercept = mean(data_depr_anx$GAD7)) + 
+  theme_minimal() +
+  labs(x="GAD7", y="Percentage", title="Anxiety Score across groups") + 
+  scale_y_continuous(labels = scales::percent) + 
+  facet_wrap(~Group)
+```
+
+### Personality traits
+
+```{r}
+data_long %>% 
+  gather(c('EmoStable', 'Extravert', 'Conscientious', 'Agreeable', 'Openness'), 
+         key = 'dimension',
+         value = 'value') %>% 
+  ggplot() + 
+  aes(x = value, fill = Group) +  
+  geom_density(alpha = 0.25) +
+  theme_minimal() +
+  labs(x="Value", y="Density", title="Distribtuions of personality traits across groups") + 
+  theme(legend.position = 'bottom') +
+  facet_wrap(~dimension)
+```
+
+## This/That in groups 
+
+```{r}
+#total this/that
+
+le <- data_long %>% 
+  group_by(Dem) %>% 
+  tally()
+
+le
+le$n[1]/nrow(data_long)
+le$n[2]/nrow(data_long)
+```
+
+
+```{r}
+#this/that in each group
+be <- data_long %>% 
+  group_by(Group, Dem) %>% 
+  tally()
+
+be %>% 
+  ggplot() +
+  aes(x=Dem, y=n, fill = Dem) + 
+  geom_col() + 
+  facet_wrap(~Group)
+be
+```
+
+
+```{r}
+#proportion this/that in each group
+group_proportion <- tibble()
+
+i = 1
+for (row in c(1,3,5,7,9,11,13,15)) {
+    prop = be$n[row]/(be$n[row]+be$n[row+1]) 
+    output = c(i, prop)
+    group_proportion <- rbind(group_proportion, output)
+    i = i + 1
+}
+
+group_proportion <- group_proportion %>% 
+  rename('Group' = colnames(group_proportion[1]),
+         'Proportion' = colnames(group_proportion[2])) %>% 
+  mutate(Group = as.factor(Group),
+         Proportion = as.numeric(Proportion))
+
+group_proportion %>% 
+  ggplot() + 
+  aes(x=Group, y=Proportion) + 
+  geom_col()
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

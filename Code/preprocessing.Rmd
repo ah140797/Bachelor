@@ -1,0 +1,770 @@
+---
+title: "preprocessing"
+author: "Anders Hjulmand"
+date: '2022-09-01'
+output: html_document
+---
+
+We load Libraries
+```{r}
+pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx)
+```
+
+We define a color palette for plots
+```{r}
+color_palette <- c(wes_palette("Chevalier1")[1], wes_palette("Darjeeling2")[2])
+```
+
+
+## Load and tidy data 
+
+We load the data into its raw format.
+```{r}
+data_raw <- read.csv("Data/ThisThat_Prolific2_2019_04_01_txt.csv", sep = ',', header = T,skip=1)
+```
+
+Load the data and tidy it: remove first row, filtering only finished trials, selecting and renaming columns.
+```{r}
+data <- data_raw
+
+data <- data %>% 
+  slice(-1) %>% 
+  filter(Finished == 'True') %>% 
+  select(6,9,14,15,17,19:ncol(data)) %>% 
+  rename('Duration' = 'Duration..in.seconds.',
+         'ID' = 'Response.ID',
+         'Latitude' = 'Location.Latitude',
+         'Longitude' = 'Location.Longitude',
+         'Language' = 'User.Language',
+         'Gender' = 'Please.indicate.your.gender',
+         'Age' = 'Please.indicate.your.age',
+         'Native_English' = 'Is.your.native.language.English.',
+         'Native_Language' = 'What.is.your.native.language.',
+         'Variety_English' = 'Which.variety.of.English.is.your.native.language....Selected.Choice',
+         'Variety_English_Other' = 'Which.variety.of.English.is.your.native.language....Other..please.type.in.....Text') %>% 
+  mutate_at(c('ID', 'Language', 'Gender', 'Age', 'Native_English', 'Native_Language', 'Variety_English', 'Variety_English_Other'), factor)
+      
+
+
+#For some reason the word "banjo" has snug in here and there
+colnames(data)[c(42,273,189,210,249,270,309,330,369,390,429,450)]<- c('mushroom','hierarchy','bay','hall','arm','ham','banana','engineer','ant','handshake','axe','gratitude')
+
+#Create a factor variable for the different groups and add it as a column to the data
+wordGroup<-as.factor(rowSums(matrix(c(1*(data$helped!=''),2*(data$aggressive!=''),3*(data$activist!=''),4*(data$accordion!=''),5*(data$damaged!=''),6*(data$alligator!=''),7*(data$accident!=''),8*(data$actor!='')),ncol=8)))
+data <- data %>% 
+  mutate(Group = as.factor(wordGroup))
+
+#drop levels
+data<-droplevels(data)
+
+```
+
+## Location of participants
+use longitude and latitude to see where people are? An idea for another time. 
+
+## Preprocess and plot personality data
+
+We make a new dataframe with the columns related to personality data, convert duration to numeric and rename columns.
+```{r}
+data_pers <- data %>% 
+  select(c(492:521))
+
+#Rename some variables in the personality data frame
+colnames(data_pers)[1:30] <- c('Pers01','Pers02','Pers03','Pers04','Pers05','Pers06','Pers07','Pers08','Pers09','Pers10','depr01','depr02','depr03','depr04','depr05','depr06','depr07','depr08','depr09','deprS','anx01','anx02','anx03','anx04','anx05','anx06','anx07','depr08r','depr09r','anxS')
+```
+
+
+### Depression and anxiety
+
+We select the questions concerning depression and anxiety. Depression and anxiety questions are scored 0-3 by recoding them to numbers. Then a total score of depression and anxiety is calculated.  
+```{r}
+data_depr_anx <- data_pers %>% 
+  select(11:19,21:27) %>% 
+  mutate_all(as.factor) %>% 
+  mutate_all(recode, 
+             'Not at all'= 0,
+             'Several days'= 1,
+             'More than half of the days'= 2,
+             'Nearly every day'= 3) %>% 
+  mutate(PHQ9 = rowSums(across(1:9)),
+         GAD7 = rowSums(across(10:16)))
+
+#adding the values to the large dataframe
+data <- data %>% 
+  mutate(
+    PHQ9 = data_depr_anx$PHQ9,
+    GAD7 = data_depr_anx$GAD7
+  )
+
+```
+
+We plot the distributions of depression and anxiety. 
+```{r}
+depr_plot <- data_depr_anx %>% 
+  ggplot() + 
+  aes(x = factor(PHQ9)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  geom_vline(xintercept = mean(data_depr_anx$PHQ9)) + 
+  theme_minimal() +
+  labs(x="PHQ9", y="Percentage", title="Depression Score") + 
+  scale_y_continuous(labels = scales::percent)
+
+anx_plot <- data_depr_anx %>% 
+  ggplot() + 
+  aes(x = factor(GAD7)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) + 
+  geom_vline(xintercept = mean(data_depr_anx$GAD7)) + 
+  theme_minimal() +
+  labs(x="GAD7", y="Percentage", title="Anxiety Score") + 
+  scale_y_continuous(labels = scales::percent)
+
+depr_plot + anx_plot
+  
+```
+
+### Personality trait test
+
+We select the columns measuring personality traits. Odd number personality questions are scored 1-7. Even number personality questions are scored 7-1 in reverse order. 
+```{r}
+data_trait <- data_pers %>% 
+  select(1:10) %>% 
+  mutate_all(as.factor) %>% 
+  mutate_at(c(1,3,5,7,9), 
+            recode,
+            'Disagree strongly'= 1,
+            'Disagree moderately'= 2,
+            'Disagree a little'= 3,
+            'Neither agree nor disagree' = 4,
+            'Agree a little' = 5,
+            'Agree moderately' = 6,
+            'Agree strongly' = 7) %>% 
+  mutate_at(c(2,4,6,8,10),
+            recode,
+            'Disagree strongly'= 7,
+            'Disagree moderately'= 6,
+            'Disagree a little'= 5,
+            'Neither agree nor disagree' = 4,
+            'Agree a little' = 3,
+            'Agree moderately' = 2,
+            'Agree strongly' = 1)
+  
+```
+
+Then we make a factor analysis.
+```{r}
+parallel <- fa.parallel(data_trait[,1:10], fm = 'minres', fa = 'fa',sim=FALSE)
+
+#Factor analysis: Five factors
+pers_fact_anal<-factanal(data_trait[,1:10],5,rotation='varimax',scores='regression')
+pers_fact<-data.frame(pers_fact_anal$scores)  %>% rename_at(vars(names(.)[1:5]), funs(c('EmoStable','Extravert','Conscientious','Agreeable','Openness'))) 
+
+data.frame(pers_fact_anal$scores[,1:5]) %>%
+  gather(key = 'Dimension', value = 'value') %>%
+  ggplot(aes(x = value, fill =Dimension)) +
+  geom_density() +
+  facet_wrap(~Dimension) +
+  guides(fill=FALSE) + 
+  scale_fill_manual(values=c('blue','darkgreen','red','darkorange','purple'))
+
+#adding the values to the large dataframe
+data[526:530]<-pers_fact
+
+```
+
+### Gender
+
+```{r}
+data %>% 
+  ggplot() + 
+  aes(y = (..count..)/sum(..count..)) +
+  aes(x=Gender) + 
+  geom_bar() + 
+  scale_y_continuous(labels = scales::percent) +
+  labs(x="none", y="Percentage", title="Gender Distribution") + 
+  theme_minimal()
+
+```
+#### Gender and Depression/Anxiety
+
+Summary stats
+```{r}
+data %>% 
+  group_by(Gender) %>% 
+  summarize(PHQ9 = mean(PHQ9),
+            GAD7 = mean(GAD7))
+```
+
+Density plots
+```{r}
+data %>% 
+   gather(c('PHQ9', 'GAD7'),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=value, fill = Gender) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'Distributions of Depression and Anxiety According to Gender') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+```
+
+#### Gender and personality trait
+Summary stats
+```{r}
+data %>% 
+  group_by(Gender) %>% 
+  summarize(Emostable = mean(EmoStable),
+            Extravert = mean(Extravert),
+            Conscientious = mean(Conscientious),
+            Agreeable = mean(Agreeable),
+            Openness = mean(Openness))
+```
+
+Density plots
+```{r}
+data %>% 
+   gather(c(526:530),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=value, fill = Gender) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'Distributions of personality traits according to gender') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+```
+### Age
+
+Here we take a closer look at age.
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+  ggplot() + 
+  aes(x = Age) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme_minimal() +
+  labs(x="Age", y="Percentage", title="Age") + 
+  scale_y_continuous(labels = scales::percent)
+```
+
+#### Age and Depression/Anxiety
+
+Summary stats
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+  group_by(Age) %>% 
+  summarize(PHQ9 = mean(PHQ9),
+            GAD7 = mean(GAD7))
+```
+
+Density plots
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+   gather(c('PHQ9','GAD7'),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=value, fill = Age) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'Distributions of Depression and Anxiety According to Age') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+```
+
+#### Age and personality trait
+Summary stats
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+  group_by(Age) %>% 
+  summarize(Emostable = mean(EmoStable),
+            Extravert = mean(Extravert),
+            Conscientious = mean(Conscientious),
+            Agreeable = mean(Agreeable),
+            Openness = mean(Openness))
+```
+
+Density plots
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+   gather(c(526:530),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=value, fill = Age) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'Distributions of personality traits according to age') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+```
+## Personality traits og depression/angst
+
+Depression and personality traits.
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+   gather(c(526:530),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=PHQ9, y=value) +
+  geom_point(size = 0.6) + 
+  stat_smooth(method = 'lm',
+              formula = 'y ~ x',
+              geom = 'smooth') +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'correlation between depression and traits') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+
+#depressed people are less conscientious, less emotionally stable and less extravert. 
+```
+Anxiety and personality traits.
+```{r}
+data %>% 
+  mutate(Age = as.factor(Age)) %>% 
+   gather(c(526:530),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=GAD7, y=value) +
+  geom_point(size = 0.6) + 
+  stat_smooth(method = 'lm',
+              formula = 'y ~ x',
+              geom = 'smooth') +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'correlation between anxiety and traits') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+
+#anxious people are less conscientious, less emotionally stable and less extravert. 
+```
+
+
+## Preparing the dataset for analysis
+
+We format the main dataframe to long format so it is ready for analysis.  
+```{r}
+data_long <- data %>%
+  select(c(1:491,523:530)) %>% 
+  gather(c(6:485),
+         key = 'Word',
+         value = 'Dem') %>% 
+  filter(complete.cases(.)) %>% 
+  filter(!(Dem == ''))%>%
+  droplevels(.) %>% 
+  mutate(Depressed = case_when(PHQ9>=10 ~ 1, # Moderate + Moderately severe + Severe
+                               PHQ9<9 ~ 0), # None + Mild
+                               #PHQ9<14 | PHQ9>2 ~ 2), #if you want more levels of depression
+         Depressed = as.factor(Depressed),
+         Depressed = fct_relevel(Depressed, '1','0'),
+         Anxiety = case_when(GAD7>8 ~ 1,
+                             GAD7<= 8 ~ 0),
+         Anxiety = as.factor(Anxiety),
+         Anxiety = fct_relevel(Anxiety, '1','0'),
+         Dem = as.factor(Dem),
+         Dem = fct_relevel(Dem, 'this', 'that'),
+         Word = as.factor(Word)
+         )
+
+#Based on a recent meta-analysis, some experts have recommended considering using a cut-off of 8 in order to optimize #sensitivity without compromising specificity2. Anxiety.
+
+#Both depression and anxiety cutoffs are none/mild - moderate/severe
+```
+
+
+### Adding NRC VAD
+
+Load the dataset
+```{r}
+NRC_VAD <- read.delim("Data/NRC-VAD-Lexicon.txt", header=FALSE)
+
+NRC_VAD <- as_tibble(NRC_VAD) 
+
+NRC_VAD <- NRC_VAD %>% 
+  rename('Word' = 'V1',
+         'Valence' = 'V2',
+         'Arousal' = 'V3',
+         'Dominance' = 'V4') %>% 
+  mutate(Word = as.factor(Word))
+```
+
+Adding the dimensions to our dataframe. 
+```{r}
+#de-lemmatize a few verbs in the VAD database, so it fits with out words and words from binder database. 
+
+#convert Word to character
+NRC_VAD <- NRC_VAD %>% 
+  mutate(Word = as.character(Word))
+
+NRC_VAD <- NRC_VAD %>% 
+  mutate(Word = case_when(
+      Word == 'help' ~ 'helped',
+      Word == 'want' ~ 'wanted',
+      Word == 'like' ~ 'liked',
+      Word == 'live' ~ 'lived',
+      TRUE ~ Word
+    )
+  )
+
+#convert word back to factor
+NRC_VAD <- NRC_VAD %>% 
+  mutate(Word = as.factor(Word))
+
+#merging
+data_long <- left_join(
+  data_long,
+  NRC_VAD,
+  by = 'Word'
+)
+
+#check which values are not in the VAD dataset (17 words)
+py <- data_long %>% 
+  filter(is.na(Valence))
+
+unique(py$Word)
+length(unique(py$Word))
+       
+#these words will be excluded when we perform analysis with VAD
+```
+
+
+Simple descriptive stats of VADs
+```{r}
+data_long %>% 
+  gather(c('Valence', 'Arousal', 'Dominance'),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=value) +
+  geom_density() +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'Distributions of NRC VAD') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+```
+
+### Adding NRC lexicon
+
+Load the dataset
+```{r}
+emotion_lex <- read.delim("Data/NRC-Emotion-Lexicon-Wordlevel-v0.92.txt", header=FALSE)
+
+emotion_lex <- as_tibble(emotion_lex) 
+
+emotion_lex <- emotion_lex %>% 
+  pivot_wider(names_from = V2,
+              values_from = V3) %>% 
+  rename('Word' = 'V1') %>% 
+  mutate_all(factor)
+```
+
+
+Then we merge
+```{r}
+
+#merging
+data_long <- left_join(
+  data_long,
+  emotion_lex,
+  by = 'Word'
+)
+
+#check which values are not in the emotion dataset
+py <- data_long %>% 
+  filter(is.na(anger))
+
+unique(py$Word)
+length(unique(py$Word))
+       
+#these words will be excluded when we perform analysis with emotion_lex
+```
+
+### Adding NRC_intensity lexicon 
+
+Load the dataset
+```{r}
+nrc_intensity <- read.delim("Data/NRC-Emotion-Intensity-Lexicon-v1.txt", header=FALSE)
+
+nrc_intensity <- as_tibble(nrc_intensity) 
+
+nrc_intensity <- nrc_intensity %>% 
+  pivot_wider(names_from = V2,
+              values_from = V3) %>% 
+  rename('Word' = 'V1',
+         'anger_nrcI' = 'anger',
+         'anticipation_nrcI' = 'anticipation',
+         'disgust_nrcI' = 'disgust',
+         'fear_nrcI' = 'fear',
+         'joy_nrcI' = 'joy',
+         'sadness_nrcI' = 'sadness',
+         'surprise_nrcI' = 'surprise',
+         'trust_nrcI' = 'trust')
+```
+
+
+Then we merge
+```{r}
+#merging
+data_long_e <- left_join(
+  data_long,
+  nrc_intensity,
+  by = 'Word'
+)
+
+#check which values are not in the emotion dataset
+py <- data_long_e %>% 
+  filter(is.na(disgust_nrcI))
+
+#unique(py$Word)
+length(unique(py$Word))
+       
+#these words will be excluded when we perform analysis with emotion_lex
+```
+
+
+### Adding categories from binder data
+
+We load the raw binder data, filter out a weird case at 'No' = 231, make columns of interest numeric, replace NA's with mean imputation and scale the values. 
+```{r}
+#Data from:
+#Binder JR, Conant LL, Humphries CJ, Fernandino L, Simons SB, Aquilar M, and Desai RH (2016) "Toward a Brain-Based Componential Semantic #Representation" published in Cognitive Neuropsychology, 33(3-4), 130-74. doi: 10.1093/cercor/bhw240
+
+#The Binder feature ratings can be downloaded from here:
+#http://www.neuro.mcw.edu/representations/index.html
+
+binder_raw <- read.xlsx('Data/Wordset1_Ratings.xlsx', sheetIndex = 1)
+
+binder <- binder_raw %>% 
+  filter(No != 231) %>% 
+  mutate_at(c(6:74), as.numeric) %>% 
+  mutate_at(c(6:74), function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))) %>% 
+  mutate_at(c(6:74), scale) %>% 
+  select(c('Word', 'Type', 'Category', 'Super.Category', 'Kmeans28.Category'))
+```
+
+Adding the dimensions to our dataframe. 
+```{r}
+#first we check that the words match
+jep <- data_long %>% 
+  filter(!(Word %in% unique(binder$Word)))
+
+length(jep$word)
+
+#all words are present in both datasets (because the words from the experiment come frmo the binder dataset)
+
+#merging
+data_long <- left_join(
+  data_long,
+  binder,
+  by = 'Word'
+)
+
+#making into factors and renaming
+data_long <- data_long %>% 
+  mutate(
+    Type = as.factor(Type),
+    Category = as.factor(Category),
+    Super.Category = as.factor(Super.Category),
+    Kmeans28.Category = as.factor(Kmeans28.Category)
+  ) %>% 
+  rename(
+    'Super_Category' = 'Super.Category',
+    'Kmeans28_Category' = 'Kmeans28.Category'
+  )
+```
+
+
+Simple descriptive stats of category data
+```{r}
+data_long %>% 
+  gather(c('Type', 'Category', 'Super_Category', 'Kmeans28_Category'),
+          key = 'dimension',
+          value = 'value') %>% 
+  ggplot() + 
+  aes(x=value) +
+  geom_density() +
+  theme_minimal() + 
+  labs(y= 'Density', title = 'Distributions of Categories') +
+  facet_wrap(~dimension) + 
+  theme(legend.position = 'bottom')
+```
+
+```{r}
+data_long %>% 
+  distinct(Word, .keep_all = TRUE) %>% 
+  group_by(Type) %>% 
+  tally() %>%  
+  arrange(n) %>% 
+  ggplot() + 
+  aes(x = fct_reorder(Type, n), y = n, fill = Type) + 
+  geom_col() + 
+  theme_minimal() + 
+  theme(legend.position = 'none') +
+  coord_flip() + 
+  labs(x='Type', y='Count', title='Number of words in each Type')
+
+data_long %>% 
+  distinct(Word, .keep_all = TRUE) %>% 
+  group_by(Category) %>% 
+  tally() %>%  
+  arrange(n) %>% 
+  ggplot() + 
+  aes(x = fct_reorder(Category, n), y = n, fill = Category) + 
+  geom_col() + 
+  theme_minimal() + 
+  theme(legend.position = 'none') +
+  coord_flip() + 
+  labs(x='Category', y='Count', title='Number of words in each category')
+
+data_long %>% 
+  distinct(Word, .keep_all = TRUE) %>% 
+  group_by(Super_Category) %>% 
+  tally() %>%  
+  arrange(n) %>% 
+  ggplot() + 
+  aes(x = fct_reorder(Super_Category, n), y = n, fill = Super_Category) + 
+  geom_col() + 
+  theme_minimal() + 
+  theme(legend.position = 'none') +
+  coord_flip() + 
+  labs(x='Super Category', y='Count', title='Number of words in each Super Category')
+
+data_long %>% 
+  distinct(Word, .keep_all = TRUE) %>% 
+  group_by(Kmeans28_Category) %>% 
+  tally() %>%  
+  arrange(n) %>% 
+  ggplot() + 
+  aes(x = fct_reorder(Kmeans28_Category, n), y = n, fill = Kmeans28_Category) + 
+  geom_col() + 
+  theme_minimal() + 
+  theme(legend.position = 'none') +
+  coord_flip() + 
+  labs(x='Kmeans28_Category', y='Count', title='Number of words in each Kmeans28_Category')
+```
+
+### Adding 12 semantic factors from binder and lancaster
+
+```{r}
+#Data from:
+#Binder JR, Conant LL, Humphries CJ, Fernandino L, Simons SB, Aquilar M, and Desai RH (2016) "Toward a Brain-Based Componential Semantic #Representation" published in Cognitive Neuropsychology, 33(3-4), 130-74. doi: 10.1093/cercor/bhw240
+
+#The Binder feature ratings can be downloaded from here:
+#http://www.neuro.mcw.edu/representations/index.html
+
+
+binder_raw <- read.xlsx('Data/WordSet1_Ratings.xlsx', sheetIndex = 1)
+
+#preprocessing binder 
+binder <- binder_raw %>% 
+  #removee a duplicate word
+  filter(No != 231) %>% 
+  #convert semantic ratings to numeric
+  mutate_at(c(6:74), as.numeric) %>% 
+  #Impute NAs with NAmean
+  mutate_at(c(6:74), function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))) %>% 
+  #scale values
+  mutate_at(c(6:74), scale) %>% 
+  #select only words and semantic ratings
+  select(c(2, 6:70))
+```
+
+```{r}
+### Import Lancaster norms
+
+
+#Paper:
+#Lynott D, Connell L, Brysbaert M, et al. (In press). The Lancaster Sensorimotor Norms: Multidimensional measures of Perceptual and Action Strength #for 40,000 English words. Behav Res Methods.
+
+# Lancaster features retrieved from here: https://osf.io/7emr6/
+
+lancaster_raw <- read.csv('Data/Lancaster_sensorimotor_norms_for_39707_words.csv', sep = ',', header = T)
+
+#preprocessing
+lancaster <- lancaster_raw %>% 
+  #translate to lower case letters
+  mutate(Word = tolower(Word)) %>% 
+  #scale
+  mutate_at(c(2:12), scale) %>% 
+  select(1:12)
+
+colnames(lancaster)[c(2:12)]<-c('Auditory_Lan','Gustatory_Lan','Haptic_Lan','Interoceptive_Lan','Olfactory_Lan','Visual_Lan','Foot_leg_Lan','Hand_arm_Lan','Head_Lan','Mouth_Lan','Torso_Lan')
+  
+```
+
+
+
+```{r}
+#Merge Binder and Lancaster data
+binder_lan = merge(binder, 
+                   lancaster,
+                   by = 'Word')
+```
+
+```{r}
+#Factor analysis on Binder & Lancaster
+
+#Use "parallel" function to find a suitable number of factors
+parallel <- fa.parallel(binder_lan[,-1], fm = 'minres', fa = 'fa',sim=FALSE)
+```
+
+
+```{r}
+### Make factor analysis, label factors and merge with data
+
+#Parallel function suggests 12 factors, we will use minres and varimax rotation
+binder_lan_fa_raw <- fa(binder_lan[,-1],nfactors = 12,rotate = "varimax",fm="minres")
+
+print(binder_lan_fa_raw, cut=0.5, order=TRUE)
+
+
+# Merge Factor scores with Word labels
+binder_lan_fa<-data.frame(binder_lan$Word,binder_lan_fa_raw$scores)
+
+colnames(binder_lan_fa)[1]<-'Word'
+
+#Inspection leads to these factor label names
+binder_lan_fa_lb<-c('Vision','Valence','Loudness','Human','TasteSmell','Motion','Manipulability','Scene','Time','TorsoLegs' ,'Arousal','Self')
+
+colnames(binder_lan_fa)[2:13]<-binder_lan_fa_lb
+```
+
+Then we merge
+```{r}
+#merging
+data_long <- left_join(
+  data_long,
+  binder_lan_fa,
+  by = 'Word'
+)
+
+#check which values are not in the binder/lancaster dataset
+py <- data_long %>% 
+  filter(is.na(Vision))
+
+unique(py$Word)
+length(unique(py$Word))
+       
+#these words will be excluded when we perform analysis with binder/lancaster
+```
+
+
+```{r}
+#write.csv(data_long,"Data/data_long.csv", row.names = FALSE)
+```
+
+
+
+
+
+
+
+

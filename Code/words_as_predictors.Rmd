@@ -1,0 +1,897 @@
+---
+title: "words_as_predictors_new_plots"
+author: "Anders Hjulmand"
+date: "2022-10-04"
+output: html_document
+---
+
+We load Libraries
+```{r}
+pacman::p_load(tidyverse, wesanderson, patchwork, ggcorrplot, tidytext, kableExtra, see, correlation, psych, ggridges, sjmisc, mctest, grid)
+```
+
+We define a color palette for plots
+```{r}
+color_palette <- c(wes_palette("Darjeeling1")[2], wes_palette("Darjeeling1")[3])
+```
+
+
+# Preprocessing 
+
+We load the data into its raw format.
+```{r}
+data_raw <- read.csv("Data/ThisThat_Prolific2_2019_04_01_txt.csv", sep = ',', header = T,skip=1)
+```
+
+And do some wrangling.
+```{r}
+data <- data_raw
+
+data <- data %>% 
+  slice(-1) %>% 
+  filter(Finished == 'True') %>% 
+  select(6,9,14,15,17,19:ncol(data)) %>% 
+  rename('Duration' = 'Duration..in.seconds.',
+         'ID' = 'Response.ID',
+         'Latitude' = 'Location.Latitude',
+         'Longitude' = 'Location.Longitude',
+         'Language' = 'User.Language',
+         'Gender' = 'Please.indicate.your.gender',
+         'Age' = 'Please.indicate.your.age',
+         'Native_English' = 'Is.your.native.language.English.',
+         'Native_Language' = 'What.is.your.native.language.',
+         'Variety_English' = 'Which.variety.of.English.is.your.native.language....Selected.Choice',
+         'Variety_English_Other' = 'Which.variety.of.English.is.your.native.language....Other..please.type.in.....Text') %>% 
+  mutate_at(c('ID', 'Language', 'Gender', 'Age', 'Native_English', 'Native_Language', 'Variety_English', 'Variety_English_Other'), factor)
+      
+
+
+#For some reason the word "banjo" has snug in here and there
+colnames(data)[c(42,273,189,210,249,270,309,330,369,390,429,450)]<- c('mushroom','hierarchy','bay','hall','arm','ham','banana','engineer','ant','handshake','axe','gratitude')
+
+#Create a factor variable for the different groups and add it as a column to the data
+wordGroup<-as.factor(rowSums(matrix(c(1*(data$helped!=''),2*(data$aggressive!=''),3*(data$activist!=''),4*(data$accordion!=''),5*(data$damaged!=''),6*(data$alligator!=''),7*(data$accident!=''),8*(data$actor!='')),ncol=8)))
+data <- data %>% 
+  mutate(Group = as.factor(wordGroup))
+
+#drop levels
+data<-droplevels(data)
+
+#selecting only words and groupnumber and ID as column.
+data <- data %>% 
+  select(c('Group', 'ID', 6:485)) %>% 
+  mutate(across(c(3:482), ~recode(., 'this' = '-1'))) %>% 
+  mutate(across(c(3:482), ~recode(., 'that' = '1'))) 
+
+```
+
+Making list of dataframes for each group, where we only keep the words in the group and merge with the factor scores from the 2-factor analysis.
+```{r}
+#loading the scores from factor analysis
+targets <- read_csv('Data/target.csv')
+targets <- targets %>%  mutate(ID = as.factor(ID))
+
+datasets <- group_split(data, with(data, Group), keep = FALSE) %>% as.list()
+
+i = 1
+for (dataset in datasets){
+  datasets[[i]] <- datasets[[i]] %>% 
+  select(-c(Group)) %>% 
+  discard(~all(is.na(.) | . =="")) %>% 
+  mutate_at(c(2:61), as.numeric)
+  datasets[[i]] <- left_join(datasets[[i]],
+                             targets,
+                             by = 'ID')
+  i = i + 1
+  
+}
+```
+
+Saving each dataframe by itself.
+```{r}
+i = 1
+for (i in seq_along(datasets)) {
+    filename = paste0('Data/words_as_predictors/group_',i,".csv")
+    write_csv(datasets[[i]], filename)
+    i = i + 1
+}
+```
+
+
+# Python code
+
+------------------------Python code------------------------
+running python code from script words_as_predictors.ipynb
+-----------------------------------------------------------
+
+# Plotting Results
+
+Load data from python script and do some cleaning
+```{r}
+df <- read_csv("Data/words_as_predictors_performance/jatjak2.csv") %>% 
+  mutate(group = case_when(group == 1 ~ 'Group 1',
+                           group == 2 ~ 'Group 2',
+                           group == 3 ~ 'Group 3',
+                           group == 4 ~ 'Group 4',
+                           group == 5 ~ 'Group 5',
+                           group == 6 ~ 'Group 6',
+                           group == 7 ~ 'Group 7',
+                           group == 8 ~ 'Group 8'),
+         target = case_when(target == 'Depressed_F1' ~ 'Depression',
+                            target == 'Anxiety_F2' ~ 'Anxiety')) %>% 
+  select(-1)
+```
+
+## Train and Holdout sets Mean and Mode
+
+First we load all the train and holdout datasets. Then we find the proportion of patients in each group for train and holdout.
+
+Defining a function to find mode
+```{r}
+find_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+```
+
+```{r, message = F}
+files <- list.files('Data/words_as_predictors_train_holdout/')
+
+train_holdout <- tibble(i = numeric(),
+                        group = factor(),
+                        type = factor(),
+                        proportion_depr = numeric(),
+                        proportion_anx = numeric())
+i=1
+for (dataset_name in files){
+  #reading the dataset
+  dataset = read_csv(paste0('Data/words_as_predictors_train_holdout/', dataset_name))
+
+#saving information
+group = as.numeric(str_extract(dataset_name, "(\\d)+"))
+type = str_sub(dataset_name, 3, 7)
+proportion_depr = 1-(sum(dataset$Depressed_F1)/nrow(dataset))
+proportion_anx = 1-(sum(dataset$Anxiety_F2)/nrow(dataset))
+
+output = c(i, group, type, proportion_depr, proportion_anx)
+train_holdout <- rbind(train_holdout, output)
+  
+i=i+1
+
+}
+train_holdout <- train_holdout %>% 
+  rename(
+    'i' = 1,
+    'group' = 2,
+    'type' = 3,
+    'proportion_depr' = 4,
+    'proportion_anx' = 5
+  )
+```
+
+
+## Ridgeplot Permutation Test 1
+
+Here we make stacked density plots for permutation test 1.
+
+
+### Holdout
+```{r}
+perm_scores <- tibble()
+
+for (i in seq(1,nrow(df), 1)){
+#wrangling permutation scores to values  
+perm_score <- df$permutation_scores_holdout[i] %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all('[\n]', '') %>% 
+  str_replace_all('[\"]', '')
+perm_score <- as.numeric(str_split(perm_score, ',')[[1]])
+perm_score <- perm_score[!is.na(perm_score)]
+
+#logging information
+group <- df$group[i]
+target <- df$target[i]
+best_model_name <- df$best_model_name[i]
+best_model_train_score = df$best_model_train_accuracy[i]
+best_model_holdout_score <- df$best_model_holdout_accuracy[i]
+permutation_accuracy_train = df$permutation_accuracy_train[i]
+permutation_accuracy_holdout = df$permutation_accuracy_holdout[i]
+permutation_pvalue_train <- df$permutation_pvalue_train[i]
+permutation_pvalue_holdout = df$permutation_pvalue_holdout[i]
+
+#manually calculating p-value from permutation test
+percentile = ecdf(perm_score)
+permutation_pvalue_holdout_manual = 1-(percentile(best_model_holdout_score))
+permutation_mean_holdout = mean(perm_score)
+permutation_mode_holdout = find_mode(perm_score)
+
+#saving output
+output = c(group, target, best_model_name, best_model_train_score, best_model_holdout_score, permutation_accuracy_train, permutation_accuracy_holdout, permutation_pvalue_train, permutation_pvalue_holdout, permutation_pvalue_holdout_manual, permutation_mean_holdout, permutation_mode_holdout, perm_score)
+
+perm_scores <- rbind(perm_scores, output)
+
+}
+
+perm_scores <- perm_scores %>% 
+  rename('group_nr' = 1,
+         'target' = 2,
+         'best_model_name' = 3,
+         'best_model_train_score' = 4,
+         'best_model_holdout_score' = 5,
+         'permutation_accuracy_train' = 6,
+         'permutaion_accuracy_holdout' = 7,
+         'permutation_pvalue_train' = 8,
+         'permutation_pvalue_holdout' = 9,
+         'permutation_pvalue_holdout_manual' = 10,
+         'permutation_mean_holdout' = 11,
+         'permutation_mode_holdout' = 12)
+
+#Adding the manually calculated p-value to the raw dataset
+df <- df %>% mutate(permutation_pvalue_holdout_manual = perm_scores$permutation_pvalue_holdout_manual,
+                    permutation_mean_holdout = perm_scores$permutation_mean_holdout,
+                    permutation_mode_holdout = perm_scores$permutation_mode_holdout)
+
+```
+
+```{r}
+depr_holdout <- perm_scores %>% 
+  filter(target == 'Depression') %>% 
+  gather(c(12:length(perm_scores)),
+         key = permutation_group,
+         value = value) %>% 
+  ggplot() + 
+  aes(x=as.numeric(value), y=factor(group_nr), group = factor(group_nr)) +  
+  geom_density_ridges(fill = wes_palette("Zissou1")[2], scale = 1) + 
+  theme_minimal() + 
+  labs(x='Accuracy score', y = 'Group') + 
+  scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
+                     limits = c(0.50, 0.80)) +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+
+anx_holdout <- perm_scores %>% 
+  filter(target == 'Anxiety') %>% 
+  gather(c(12:length(perm_scores)),
+         key = permutation_group,
+         value = value) %>% 
+  ggplot() + 
+  aes(x=as.numeric(value), y=factor(group_nr), group = factor(group_nr)) +  
+  geom_density_ridges(fill = wes_palette("Zissou1")[2], scale = 1) + 
+  theme_minimal() + 
+  labs(x='Accuracy score', y = 'Group') + 
+  scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
+                     limits = c(0.50, 0.80)) +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+
+#png('figures/words_as_predictors/permutation_holdout_depr.PNG', width = 10, height = 12, units = 'in', res = 300)
+depr_holdout
+dev.off()
+
+#png('figures/words_as_predictors/permutation_holdout_anx.PNG', width = 10, height = 12, units = 'in', res = 300)
+anx_holdout
+dev.off()
+```
+
+### Train
+
+```{r}
+perm_scores <- tibble()
+
+for (i in seq(1,nrow(df), 1)){
+#wrangling permutation scores to values  
+perm_score <- df$permutation_scores_train[i] %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all('[\n]', '') %>% 
+  str_replace_all('[\"]', '')
+perm_score <- as.numeric(str_split(perm_score, ',')[[1]])
+perm_score <- perm_score[!is.na(perm_score)]
+
+#logging information
+group <- df$group[i]
+target <- df$target[i]
+best_model_name <- df$best_model_name[i]
+best_model_train_score = df$best_model_train_accuracy_cv[i]
+best_model_holdout_score <- df$best_model_holdout_accuracy[i]
+permutation_accuracy_train = df$permutation_accuracy_train[i]
+permutation_accuracy_holdout = df$permutation_accuracy_holdout[i]
+permutation_pvalue_train <- df$permutation_pvalue_train[i]
+permutation_pvalue_holdout = df$permutation_pvalue_holdout[i]
+
+#manually calculating p-value from permutation test
+percentile = ecdf(perm_score)
+permutation_pvalue_train_manual = 1-(percentile(best_model_train_score))
+permutation_mean_train = mean(perm_score)
+permutation_mode_train = find_mode(perm_score)
+
+#saving output
+output = c(group, target, best_model_name, best_model_train_score, best_model_holdout_score, permutation_accuracy_train, permutation_accuracy_holdout, permutation_pvalue_train, permutation_pvalue_holdout, permutation_pvalue_train_manual, permutation_mean_train, permutation_mode_train, perm_score)
+
+perm_scores <- rbind(perm_scores, output)
+
+}
+
+perm_scores <- perm_scores %>% 
+  rename('group_nr' = 1,
+         'target' = 2,
+         'best_model_name' = 3,
+         'best_model_train_score' = 4,
+         'best_model_holdout_score' = 5,
+         'permutation_accuracy_train' = 6,
+         'permutaion_accuracy_holdout' = 7,
+         'permutation_pvalue_train' = 8,
+         'permutation_pvalue_holdout' = 9,
+         'permutation_pvalue_train_manual' = 10,
+         'permutation_mean_train' = 11,
+         'permutation_mode_train' = 12)
+
+#Adding the manually calculated p-value to the raw dataset
+df <- df %>% mutate(permutation_pvalue_train_manual = perm_scores$permutation_pvalue_train_manual,
+                    permutation_mean_train = perm_scores$permutation_mean_train,
+                    permutation_mode_train = perm_scores$permutation_mode_train)
+
+```
+
+```{r}
+depr_holdout <- perm_scores %>% 
+  filter(target == 'Depression') %>% 
+  gather(c(12:length(perm_scores)),
+         key = permutation_group,
+         value = value) %>% 
+  ggplot() + 
+  aes(x=as.numeric(value), y=factor(group_nr), group = factor(group_nr)) +  
+  geom_density_ridges(fill = wes_palette("Zissou1")[2], scale = 1) + 
+  theme_minimal() + 
+  labs(x='Accuracy score', y = 'Group') + 
+  scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
+                     limits = c(0.60, 0.80)) +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+
+anx_holdout <- perm_scores %>% 
+  filter(target == 'Anxiety') %>% 
+  gather(c(12:length(perm_scores)),
+         key = permutation_group,
+         value = value) %>% 
+  ggplot() + 
+  aes(x=as.numeric(value), y=factor(group_nr), group = factor(group_nr)) +  
+  geom_density_ridges(fill = wes_palette("Zissou1")[2], scale = 1) + 
+  theme_minimal() + 
+  labs(x='Accuracy score', y = 'Group') + 
+  scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
+                     limits = c(0.60, 0.80)) +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+
+png('figures/words_as_predictors/permutation_train_depr.PNG', width = 10, height = 12, units = 'in', res = 300)
+depr_holdout
+dev.off()
+
+png('figures/words_as_predictors/permutation_train_anx.PNG', width = 10, height = 12, units = 'in', res = 300)
+anx_holdout
+dev.off()
+
+
+
+```
+
+
+## Feature Plots
+
+We first make a dataframe with one row for each feature and tons of information.
+```{r}
+features_df <- tibble()
+
+for (i in seq(1,nrow(df), 1)){
+  print(i)
+  
+  #setting up dataframes
+  feature_df_small <- tibble(feature_name = character(),
+                             coefficient = numeric())
+  
+  feature_names_df <- tibble()
+  feature_importances_train_df <- tibble()
+  feature_std_train_df <- tibble()
+  feature_importances_holdout_df <- tibble()
+  feature_std_holdout_df <- tibble()
+  feature_coefs_df <- tibble()
+  
+#adding some information
+group = df$group[i]
+target = df$target[i]
+train_accuracy = df$best_model_train_accuracy_cv[i]
+holdout_accuracy = df$best_model_holdout_accuracy[i]
+permutation_pvalue_train_manual = df$permutation_pvalue_train_manual[i]
+permutation_pvalue_holdout_manual = df$permutation_pvalue_holdout_manual[i]
+
+#looping over feature names
+feature_names <- df$feature_names[i] %>% 
+  str_replace_all('[\"]', '') %>% 
+  str_replace_all('[\']', '') %>% 
+  str_replace_all('[(]|[)]', '') %>% 
+  str_replace_all(' ', '')
+feature_names <- str_split(feature_names, ',')[[1]]
+feature_names_df <- rbind(feature_names_df, feature_names) %>% rotate_df()
+print('name')
+
+#looping over importances and cleaning them TRAIN
+importances_train <- df$FI_mean_train[i] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,,,', ',') %>% 
+  str_replace_all(',,,', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+importances_train <- gsub('\\[,', '', importances_train)
+importances_train <- gsub('\\[\\[', '', importances_train)
+importances_train <- gsub('\\,]', '', importances_train)
+importances_train <- gsub('\\[', '', importances_train)
+importances_train <- gsub('\\]', '', importances_train)
+importances_train <- as.numeric(str_split(importances_train, ',')[[1]])
+feature_importances_train_df <- rbind(feature_importances_train_df, importances_train) %>% rotate_df()
+print('coef')
+
+#looping over standard deviations for importances TRAIN
+stds_train <- df$FI_std_train[i]  %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,,,', ',') %>% 
+  str_replace_all(',,,', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+stds_train <- gsub('\\[,', '', stds_train)
+stds_train <- gsub('\\[\\[', '', stds_train)
+stds_train <- gsub('\\,]', '', stds_train)
+stds_train <- gsub('\\[', '', stds_train)
+stds_train <- gsub('\\]', '', stds_train)
+stds_train <- as.numeric(str_split(stds_train, ',')[[1]])
+feature_std_train_df <- rbind(feature_std_train_df, stds_train) %>% rotate_df()
+
+#looping over importances and cleaning them HOLDOUT
+importances_holdout <- df$FI_mean_holdout[i] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,,,', ',') %>% 
+  str_replace_all(',,,', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+importances_holdout <- gsub('\\[,', '', importances_holdout)
+importances_holdout <- gsub('\\[\\[', '', importances_holdout)
+importances_holdout <- gsub('\\,]', '', importances_holdout)
+importances_holdout <- gsub('\\[', '', importances_holdout)
+importances_holdout <- gsub('\\]', '', importances_holdout)
+importances_holdout <- as.numeric(str_split(importances_holdout, ',')[[1]])
+feature_importances_holdout_df <- rbind(feature_importances_holdout_df, importances_holdout) %>% rotate_df()
+print('coef')
+
+#looping over standard deviations for importances HOLDOUT
+stds_holdout <- df$FI_std_holdout[i]  %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,,,', ',') %>% 
+  str_replace_all(',,,', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+stds_holdout <- gsub('\\[,', '', stds_holdout)
+stds_holdout <- gsub('\\[\\[', '', stds_holdout)
+stds_holdout <- gsub('\\,]', '', stds_holdout)
+stds_holdout <- gsub('\\[', '', stds_holdout)
+stds_holdout <- gsub('\\]', '', stds_holdout)
+stds_holdout <- as.numeric(str_split(stds_holdout, ',')[[1]])
+feature_std_holdout_df <- rbind(feature_std_holdout_df, stds_holdout) %>% rotate_df()
+
+
+#looping over coefficients and cleaning them
+coefs <- df$best_model_coef[i] %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all(' ', ',') %>% 
+  str_replace_all(',,,,', ',') %>% 
+  str_replace_all(',,,', ',') %>% 
+  str_replace_all(',,', ',') %>% 
+  str_replace_all('[\n]', '')
+coefs <- gsub('\\[\\[,', '', coefs)
+coefs <- gsub('\\[\\[', '', coefs)
+coefs <- gsub('\\]\\]|\\,]\\]', '', coefs)
+coefs <- as.numeric(str_split(coefs, ',')[[1]])
+feature_coefs_df <- rbind(feature_coefs_df, coefs) %>% rotate_df()
+print('coef')
+
+output = cbind(i, group, target, train_accuracy, holdout_accuracy, permutation_pvalue_train_manual, permutation_pvalue_holdout_manual, feature_names_df, feature_importances_train_df, feature_std_train_df, feature_importances_holdout_df, feature_std_holdout_df, feature_coefs_df)
+print('output')
+features_df <- rbind(features_df, output)
+print('large_df')
+}
+
+features_df <- features_df %>% 
+  rename('feature_name' = 8,
+         'feature_importance_train' = 9,
+         'feature_importance_std_train' = 10,
+         'faeture_importance_holdout' = 11,
+         'feature_importance_std_holdout' = 12,
+         'feature_coefficient' = 13) %>% 
+   mutate('feature_coefficient_odds_ratio' = exp(feature_coefficient),
+          direction = ifelse(feature_coefficient < 0, 'negative', 'positive'),
+          direction = as.factor(direction))
+```
+
+## Coefficient Plots
+
+We make plots for beta coefficients for each word.
+```{r}
+depr_train <- features_df %>% 
+  filter(target=='Depression') %>% 
+  filter(permutation_pvalue_train_manual < 0.05) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_coefficient), y = feature_coefficient) + geom_bar(aes(fill = feature_coefficient), stat = 'identity') +
+  scale_fill_distiller(palette = 'RdYlGn',direction = 1) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Coefficients', title = 'Training Dataset') +
+  theme(axis.text.x = element_text(angle = 90,size=12,hjust=1),axis.title.y=element_text(size=16)) +
+  geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE)
+
+depr_holdout <- features_df %>% 
+  filter(target=='Depression') %>% 
+  filter(permutation_pvalue_holdout_manual < 0.05) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_coefficient), y = feature_coefficient) + geom_bar(aes(fill = feature_coefficient), stat = 'identity') +
+  scale_fill_distiller(palette = 'RdYlGn',direction = 1) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Coefficients', title = 'Holdout Dataset') +
+  theme(axis.text.x = element_text(angle = 90,size=12,hjust=1),axis.title.y=element_text(size=16)) +
+  geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE)
+
+depr_train + depr_holdout  + plot_annotation(
+  title = 'Coefficients of Words in Significant Models predicting Depression',
+  subtitle = '')
+
+anx_train_1 <- features_df %>% 
+  filter(target=='Anxiety') %>% 
+  filter(permutation_pvalue_train_manual < 0.05) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_coefficient), y = feature_coefficient) + geom_bar(aes(fill = feature_coefficient), stat = 'identity') +
+  scale_fill_distiller(palette = 'RdYlGn',direction = 1) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Coefficients', title = 'Training Dataset') +
+  theme(axis.text.x = element_text(angle = 90,size=12,hjust=1),axis.title.y=element_text(size=16)) +
+  geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE)
+
+anx_train <- features_df %>% 
+  filter(target=='Anxiety') %>% 
+  filter(permutation_pvalue_train_manual < 0.05) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_coefficient), y = feature_coefficient) + geom_bar(aes(fill = feature_coefficient), stat = 'identity') +
+  scale_fill_distiller(palette = 'RdYlGn',direction = 1) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Coefficients', title = 'Training Dataset') +
+  theme(axis.text.x = element_text(angle = 90,size=12,hjust=1),axis.title.y=element_text(size=16)) +
+  geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE)
+
+anx_holdout <- features_df %>% 
+  filter(target=='Anxiety') %>% 
+  filter(permutation_pvalue_holdout_manual < 0.05) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_coefficient), y = feature_coefficient) + geom_bar(aes(fill = feature_coefficient), stat = 'identity') +
+  scale_fill_distiller(palette = 'RdYlGn',direction = 1) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Coefficients', title = 'Holdout Dataset') +
+  theme(axis.text.x = element_text(angle = 90,size=12,hjust=1),axis.title.y=element_text(size=16)) +
+  geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE)
+
+anx_train + anx_holdout  + plot_annotation(
+  title = 'Coefficients of Words in Significant Models predicting Anxiety',
+  subtitle = '')
+```
+
+
+## Feature Importance Plots
+
+We make plots for feature importance of words.
+```{r}
+depr_train <- features_df %>% 
+  filter(target=='Depression') %>% 
+  filter(permutation_pvalue_train_manual < 0.05) %>% 
+  filter(feature_importance_train != 0) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_importance_train), y = feature_importance_train) +
+  geom_bar(aes(fill = direction), stat = 'identity') +
+  geom_errorbar(aes(ymin=feature_importance_train-feature_importance_std_train, ymax=feature_importance_train+feature_importance_std_train), width=.2,
+                 position=position_dodge(.9)) +
+  scale_fill_manual(values = color_palette) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
+  theme(axis.text.y = element_text(size=8,hjust=1),axis.title.y=element_text(size=14)) +
+  geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation) < 0.01'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
+  coord_flip() + 
+  annotation_custom(grobTree(textGrob("p(permutation) < 0.01", x=0.8,  y=0.05, hjust=0,
+  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
+
+  depr_holdout <- features_df %>% 
+  filter(target=='Depression') %>% 
+  filter(permutation_pvalue_holdout_manual < 0.05) %>% 
+  filter(faeture_importance_holdout != 0) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, faeture_importance_holdout), y = faeture_importance_holdout) +
+  geom_bar(aes(fill = direction), stat = 'identity') +
+  geom_errorbar(aes(ymin=faeture_importance_holdout-feature_importance_std_holdout, ymax=faeture_importance_holdout+feature_importance_std_holdout), width=.2,
+                 position=position_dodge(.9)) +
+  scale_fill_manual(values = color_palette) +  
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
+  theme(axis.text.y = element_text(size=12,hjust=1),axis.title.y=element_text(size=14)) +
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation < 0.05'),hjust=1, vjust=-1,inherit.aes = FALSE)  + 
+  coord_flip() + 
+  annotation_custom(grobTree(textGrob("p(permutation) < 0.05", x=0.8,  y=0.05, hjust=0,
+  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
+
+#depr_train + depr_holdout  + plot_annotation(
+#  title = 'Feature Importance of Words in Significant Models predicting Depression',
+#  subtitle = '')
+
+anx_train <- features_df %>% 
+  filter(target=='Anxiety') %>% 
+  filter(permutation_pvalue_train_manual < 0.05) %>% 
+  filter(feature_importance_train != 0) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, feature_importance_train), y = feature_importance_train) +
+  geom_bar(aes(fill = direction), stat = 'identity') +
+  geom_errorbar(aes(ymin=feature_importance_train-feature_importance_std_train, ymax=feature_importance_train+feature_importance_std_train), width=.2,
+                 position=position_dodge(.9)) +
+  scale_fill_manual(values = color_palette) +  
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
+  theme(axis.text.y = element_text(size=7.5,hjust=1),axis.title.y=element_text(size=14)) +
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation) < 0.01'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
+  coord_flip() + 
+  annotation_custom(grobTree(textGrob("p(permutation) < 0.01", x=0.8,  y=0.05, hjust=0,
+  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic")))) 
+
+anx_holdout <- features_df %>% 
+  filter(target=='Anxiety') %>% 
+  filter(permutation_pvalue_holdout_manual < 0.05) %>% 
+  filter(faeture_importance_holdout != 0) %>% 
+  ggplot() +
+  aes(x = reorder(feature_name, faeture_importance_holdout), y = faeture_importance_holdout) +
+  geom_bar(aes(fill = direction), stat = 'identity') +
+  geom_errorbar(aes(ymin=faeture_importance_holdout-feature_importance_std_holdout, ymax=faeture_importance_holdout+feature_importance_std_holdout), width=.2,
+                 position=position_dodge(.9)) +
+  scale_fill_manual(values = color_palette) + 
+  theme_minimal() + 
+  theme(legend.position='none') +
+  labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
+  theme(axis.text.y = element_text(size=12,hjust=1),axis.title.y=element_text(size=14)) +
+  #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation) < 0.05'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
+  coord_flip() + 
+  annotation_custom(grobTree(textGrob("p(permutation) < 0.05", x=0.8,  y=0.05, hjust=0,
+  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
+
+#anx_train + anx_holdout  + plot_annotation(
+#  title = 'Feature Importance of Words in Significant Models predicting Anxiety',
+#  subtitle = '')
+
+png('figures/words_as_predictors/permutation_importance_deprtrain.png', width = 10, height = 12, units = 'in', res = 300)
+depr_train
+dev.off()
+
+png('figures/words_as_predictors/permutation_importance_deprholdout.png', width = 10, height = 8, units = 'in', res = 300)
+depr_holdout
+dev.off()
+
+png('figures/words_as_predictors/permutation_importance_anxtrain.png', width = 10, height = 17, units = 'in', res = 300)
+anx_train
+dev.off()
+
+png('figures/words_as_predictors/permutation_importance_anxholdout.png', width = 10, height = 10, units = 'in', res = 300)
+anx_holdout
+dev.off()
+
+```
+
+
+## Plotting pairwise partial correlation of features
+
+We can also make a partial correlation matrix for each target in each group.
+```{r}
+best_features = as.character((df %>% filter(group == 'Group 1') %>%
+                                filter(target ==  'Depressed') %>%
+                                select(feature_names)))
+best_features = str_replace_all(best_features, '[[:punct:]]', "")
+best_features = str_split(best_features, " ")
+best_features = best_features[[1]]
+
+#adding the target as the last column
+best_features_target <- as.list(best_features)
+best_features_target <- append(best_features_target, 'Depressed')
+best_features_target <- as.character(best_features_target)
+```
+
+```{r}
+
+#Setting up variables
+targets = c('Depression', 'Anxiety')
+groups = c('Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5', 'Group 6', 'Group 7', 'Group 8')
+plot_list = list()
+  
+i = 1
+data_n = 1
+
+#looping over targets
+
+#looping over groups
+for (group_n in groups){
+print(paste('Group', data_n))
+    
+    
+for (target_n in targets){
+    
+print(paste('Beginning', i))
+    
+#selecting the best subset of features
+# its a lot of trouble convert it into the right format, but it works
+best_features = as.character((df %>% filter(group == group_n) %>%
+                                filter(target ==  target_n) %>%
+                                select(feature_names)))
+best_features = str_replace_all(best_features, '[[:punct:]]', "") %>% 
+  str_replace_all('[\n]', '') %>% 
+  str_replace_all('  ', ' ') %>% 
+  str_replace_all('   ', ' ') %>% 
+  str_replace_all('    ', ' ') %>% 
+  str_replace_all('     ', ' ') %>% 
+  str_replace_all('  ', ' ')
+best_features = str_split(best_features, " ")
+best_features = best_features[[1]]
+
+#adding the target as the last column
+best_features_target <- as.list(best_features)
+best_features_target <- append(best_features_target, target_n)
+best_features_target <- as.character(best_features_target)
+
+print(best_features)
+
+#subsetting the best_features + the target 
+ku <- datasets[[data_n]] %>% 
+  select(-c(Depressed,Anxiety)) %>% 
+  rename(Depression = Depressed_F1,
+         Anxiety = Anxiety_F2) %>% 
+  #selecting the best features
+  select(all_of(best_features_target))# %>% 
+  #mutate_all(funs(ifelse(. == -1, 0, .)))
+
+#make the partial correlation matrix
+hep <- round(partial.r(data = ku,
+                 x = best_features,
+                 y = target_n, 
+                 method = 'kendall'
+                 )
+             ,1)
+
+#making the correlation plot
+plot <- ggcorrplot(hep,
+           hc.order = TRUE,
+           type = "lower",
+           outline.color = "white",
+           ggtheme = ggplot2::theme_minimal,
+           lab = TRUE,
+           show.legend = FALSE, 
+           #tl.cex = 200/length(best_features_target),
+           colors = c("#6D9EC1", "white", "#E46726")) #+
+  #labs(title = paste(group_n, 'with target', target_n)) + 
+  #theme(plot.title = element_text(size=18))
+
+#appending the list of the plots
+plot_list[[i]] = plot
+
+#saving the ggplot as a png
+filename = paste0("figures/words_as_predictors/correlation_matrix/", group_n, target_n, ".png")
+
+#saving plots in different sizes to make them all readable  
+#case_when(target_n == 'Anxiety' & group_nr == 'Group 6' ~ png(filename, width = 15, height = 15, units = 'in', res = 300),
+#          target_n == 'Anxiety' & group_nr == 'Group 7' ~ png(filename, width = 15, height = 15, units = 'in', res = 300),
+#          TRUE ~ png(filename, width = 10, height = 10, units = 'in', res = 300))
+
+
+#making the size dependent on the number of words
+size = 40*length(best_features_target)*0.01
+  
+png(filename, width = size, height = size, units = 'in', res = 300)
+
+print(plot_list[[i]])
+dev.off()
+
+print(paste('End', i))
+  
+#appending to next plot
+i = i + 1
+} #finish group loop
+#appending to next dataset  
+data_n = data_n + 1   
+}
+
+#how to make tetrachoric correlations??
+```
+
+
+#Performance of best model
+
+```{r}
+depression <- df %>% 
+  filter(target == 'Depression') %>% 
+  filter(score == 'accuracy') %>% 
+  group_by(group) %>% 
+  summarize(accuracy = best_model_holdout_score) %>% 
+  arrange(desc(accuracy)) %>% 
+  ggplot() + 
+  aes(x = desc(reorder(group,accuracy)), y = accuracy, fill = group) + 
+  geom_bar(stat = 'identity') + 
+  theme_minimal() + 
+  labs(x='Group Number', y='Performance (Accuracy)', title='Depression') +
+  ylim(0, 1) + 
+  geom_text(aes(label = group),
+            vjust = -0.3) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+anxiety <- df %>% 
+  filter(target == 'Anxiety') %>% 
+  group_by(group) %>% 
+  filter(score == 'accuracy') %>% 
+  summarize(accuracy = best_model_holdout_score) %>% 
+  arrange(desc(accuracy)) %>% 
+  ggplot() + 
+  aes(x = desc(reorder(group,accuracy)), y = accuracy, fill = group) + 
+  geom_bar(stat = 'identity') + 
+  theme_minimal() + 
+  labs(x='Group Number', y='Performance (Accuracy)', title='Anxiety') +
+  ylim(0, 1) + 
+  geom_text(aes(label = group),
+            vjust = -0.3) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+
+#png("figures/words_as_predictors/performance.png", width = 20, height = 10, units = 'in', res = 300)
+
+depression / anxiety + 
+  plot_layout(guides = 'collect') +
+  plot_annotation(title='Performance of Best Models',
+                  subtitle = 'Scoring Metric Accuracy')
+
+#dev.off()
+
+```
+
+# Popularity of Best performing Models
+
+```{r}
+kek <- df %>% 
+  group_by(best_model_name) %>% 
+  tally() %>% 
+  arrange(desc(n)) %>% 
+  ggplot() + 
+  aes(x = reorder(best_model_name, n), y = n, fill = best_model_name) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() +
+  labs(x= "remove x axis", y="Count", title = "Popularity of Best Performing Models") + 
+  theme_minimal() + 
+  theme(legend.position = 'none') +
+  scale_fill_discrete(color_palette)
+
+kek
+```
+
+
+
+
+
+
+
+
+
+
+
