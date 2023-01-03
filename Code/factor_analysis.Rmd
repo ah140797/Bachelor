@@ -7,7 +7,7 @@ output: html_document
 
 We load Libraries
 ```{r}
-pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx, RColorBrewer, GPArotation, ggcorrplot, ggpubr, bestNormalize)
+pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx, RColorBrewer, GPArotation, ggcorrplot, ggpubr, bestNormalize, svglite)
 ```
 
 We define a color palette for plots
@@ -193,6 +193,7 @@ det(cor(data_factor_an_cor))
 p_values <- cor_pmat(data_factor_an_cor)
 
 #png("figures/exploratory_factor_analysis/correlation_matrix.png", width = 10, height = 10, units = 'in', res = 300)
+svglite("figures/exploratory_factor_analysis/correlation_matrix.svg", width = 10, height = 10)
 
 ggcorrplot(corr,
            hc.order = TRUE,
@@ -200,9 +201,11 @@ ggcorrplot(corr,
            outline.color = "white",
            ggtheme = ggplot2::theme_minimal,
            colors = c("#6D9EC1", "white", "#E46726"),
-           lab = TRUE) +
+           lab = TRUE,
+           #lab_size = 8,
+           tl.cex = 14) +
   theme(legend.position = 'none')
-#dev.off()
+dev.off()
 
 perscor <- cor(data_factor_an_cor)
 det(cor(data_factor_an_cor))
@@ -288,8 +291,8 @@ f1_plot <- loadings_fa_long %>%
   filter(loading >= 0.5) %>% 
   ggplot() +
   aes(x = order, y = loading) +
-  geom_bar(aes(fill = loading), stat = 'identity') +
-  labs(x='', y='Factor loadings')+
+  geom_bar(aes(fill = loading), stat = 'identity', width = 0.6) +
+  labs(x='', y='Factor loadings') + 
   #geom_text(axis.text.x = element_text(angle = 90,size=12,hjust=1)) +
   scale_fill_distiller(palette = 'Blues',direction = 1)+# Add categories to axis
   scale_x_continuous(
@@ -300,9 +303,11 @@ f1_plot <- loadings_fa_long %>%
   theme_minimal() +
   theme(legend.position='none') + 
   #labs(title = 'Depression (0.59) [0.91]') +
-  labs(title = 'a) Depression') +
+  #labs(title = 'a) Depression') +
   ylim(0, 0.75) +
-  coord_flip()
+  coord_flip() +
+  theme(axis.text.x = element_text(size=24), axis.title.x = element_text(size=24), axis.text.y = element_text(size=24))# + 
+  #theme(text = element_text(family = "Calibri"))
 
 f2_plot <- loadings_fa_long %>% 
   filter(factor == 'F2') %>%
@@ -311,7 +316,7 @@ f2_plot <- loadings_fa_long %>%
   filter(loading >= 0.5) %>% 
   ggplot() +
   aes(x = order, y = loading) +
-  geom_bar(aes(fill = loading), stat = 'identity', width = 0.4) +
+  geom_bar(aes(fill = loading), stat = 'identity', width = 0.3) +
   labs(x='', y='Factor loadings')+
   #geom_text(axis.text.x = element_text(angle = 90,size=12,hjust=1)) +
   scale_fill_distiller(palette = 'Blues',direction = 1)+# Add categories to axis
@@ -323,18 +328,33 @@ f2_plot <- loadings_fa_long %>%
   theme_minimal() +
   theme(legend.position='none') + 
   #labs(title = 'Anxiety (0.41) [0.88]') +
-  labs(title = 'b) Anxiety') +
+  #labs(title = 'b) Anxiety') +
   ylim(0, 0.75) +
-  coord_flip() 
+  coord_flip() +
+  theme(axis.text.x = element_text(size=27), axis.title.x = element_text(size=27), axis.text.y = element_text(size=27))# + 
+  #theme(text = element_text(family = "Calibri"))
   
 
-png("figures/exploratory_factor_analysis/loadings_depr.png", width = 10, height = 10, units = 'in', res = 300)
+#png("figures/exploratory_factor_analysis/loadings_depr.png", width = 15, height = 10, units = 'in', res = 300)
+#f1_plot
+#dev.off()
+
+#png("figures/exploratory_factor_analysis/loadings_anx.png", width = 15, height = 10, units = 'in', res = 300)
+#f2_plot
+#dev.off()
+
+
+svglite("figures/exploratory_factor_analysis/loadings_depr_2.svg", width = 15, height = 10)
 f1_plot
 dev.off()
 
-png("figures/exploratory_factor_analysis/loadings_anx.png", width = 10, height = 10, units = 'in', res = 300)
+
+svglite("figures/exploratory_factor_analysis/loadings_anx_2.svg", width = 15, height = 10)
 f2_plot
 dev.off()
+
+
+
 # +
   #plot_annotation(title='Item loadings with two factors using varimax')
                   #subtitle = 'Proportion explained shown in () \nChronbecks alpha shown in []')
@@ -442,14 +462,15 @@ data_fa_2_cor <- data_fa_2 %>%
   select(c(2:10)) %>% 
   mutate_all(as.numeric) %>% 
   rename('Factor 1: Depression' = 'F1_var',
-         'Factor 2: Anxiety' = 'F2_var')
+         'Factor 2: Anxiety' = 'F2_var',
+         'Emotional Stability' = EmoStable)
 
 #we scale all the values
 #data_fa_2_cor <- scale(data_fa_2_cor)
 #data_fa_2_cor <- as_tibble(data_fa_2_cor)
 
 corr_obl <- round(cor(data_fa_2_cor %>% select(F1_obl, F2_obl, PHQ9, GAD7, EmoStable)), 2)
-corr_var <- round(cor(data_fa_2_cor %>% select('Factor 1: Depression', 'Factor 2: Anxiety', PHQ9, GAD7, EmoStable)), 2)
+corr_var <- round(cor(data_fa_2_cor %>% select('Factor 1: Depression', 'Factor 2: Anxiety', PHQ9, GAD7, 'Emotional Stability')), 2)
 corr_pca <- round(cor(data_fa_2_cor %>% select(P1_var, P2_var, PHQ9, GAD7, EmoStable)), 2)
 
 var_cor <- ggcorrplot(corr_var,
@@ -460,11 +481,11 @@ var_cor <- ggcorrplot(corr_var,
            colors = c("#6D9EC1", "white", "#E46726"),
            lab = TRUE,
            lab_size = 8,
-           tl.cex = 20) + 
+           tl.cex = 22) + 
   #labs(title = 'FA Varimax') + 
   theme(legend.position = 'none')
 
-obl_cor <- ggcorrplot(corr_obl,
+obl_cor <- ggcorrplot(corr_obl,w
            #hc.order = TRUE,
            type = "lower",
            outline.color = "white",
@@ -484,7 +505,8 @@ pca_cor<- ggcorrplot(corr_pca,
   labs(title = 'PCA Varimax') + 
   theme(legend.position = 'none')
 
-png("figures/exploratory_factor_analysis/uncorrelating_varimax.png", width = 10, height = 10, units = 'in', res = 300)
+#png("figures/exploratory_factor_analysis/uncorrelating_varimax.png", width = 10, height = 10, units = 'in', res = 300)
+svglite("figures/exploratory_factor_analysis/uncorrelating_varimax.svg", width = 10, height = 12)
 var_cor 
 dev.off()
 obl_cor

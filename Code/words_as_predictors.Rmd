@@ -7,7 +7,7 @@ output: html_document
 
 We load Libraries
 ```{r}
-pacman::p_load(tidyverse, wesanderson, patchwork, ggcorrplot, tidytext, kableExtra, see, correlation, psych, ggridges, sjmisc, mctest, grid)
+pacman::p_load(tidyverse, wesanderson, patchwork, ggcorrplot, tidytext, kableExtra, see, correlation, psych, ggridges, sjmisc, mctest, grid, svglite)
 ```
 
 We define a color palette for plots
@@ -247,7 +247,7 @@ depr_holdout <- perm_scores %>%
   labs(x='Accuracy score', y = 'Group') + 
   scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
                      limits = c(0.50, 0.80)) +
-  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=16), axis.text.x = element_text(size=16), axis.title.x = element_text(size=16, vjust=0.1))
 
 anx_holdout <- perm_scores %>% 
   filter(target == 'Anxiety') %>% 
@@ -261,13 +261,15 @@ anx_holdout <- perm_scores %>%
   labs(x='Accuracy score', y = 'Group') + 
   scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
                      limits = c(0.50, 0.80)) +
-  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=16), axis.text.x = element_text(size=16), axis.title.x = element_text(size=16, vjust=0.1))
 
 #png('figures/words_as_predictors/permutation_holdout_depr.PNG', width = 10, height = 12, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_holdout_depr.svg', width = 10, height = 12)
 depr_holdout
 dev.off()
 
 #png('figures/words_as_predictors/permutation_holdout_anx.PNG', width = 10, height = 12, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_holdout_anx.svg', width = 10, height = 12)
 anx_holdout
 dev.off()
 ```
@@ -324,6 +326,10 @@ perm_scores <- perm_scores %>%
          'permutation_mean_train' = 11,
          'permutation_mode_train' = 12)
 
+perm_scores <- perm_scores %>% 
+  mutate(nice_plots_lower = 0.5,
+         nice_plots_upper = 0.8)
+
 #Adding the manually calculated p-value to the raw dataset
 df <- df %>% mutate(permutation_pvalue_train_manual = perm_scores$permutation_pvalue_train_manual,
                     permutation_mean_train = perm_scores$permutation_mean_train,
@@ -343,8 +349,8 @@ depr_holdout <- perm_scores %>%
   theme_minimal() + 
   labs(x='Accuracy score', y = 'Group') + 
   scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
-                     limits = c(0.60, 0.80)) +
-  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+                     limits = c(0.50, 0.80)) +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=16), axis.text.x = element_text(size=16), axis.title.x = element_text(size=16, vjust=0.1))
 
 anx_holdout <- perm_scores %>% 
   filter(target == 'Anxiety') %>% 
@@ -357,14 +363,16 @@ anx_holdout <- perm_scores %>%
   theme_minimal() + 
   labs(x='Accuracy score', y = 'Group') + 
   scale_x_continuous(breaks = c(0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80),
-                     limits = c(0.60, 0.80)) +
-  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14), axis.title.x = element_text(size=14))
+                     limits = c(0.50, 0.80)) +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(size=16), axis.text.x = element_text(size=16), axis.title.x = element_text(size=16, vjust=0.1))
 
-png('figures/words_as_predictors/permutation_train_depr.PNG', width = 10, height = 12, units = 'in', res = 300)
+#png('figures/words_as_predictors/permutation_train_depr.PNG', width = 10, height = 12, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_train_depr.svg', width = 10, height = 12)
 depr_holdout
 dev.off()
 
-png('figures/words_as_predictors/permutation_train_anx.PNG', width = 10, height = 12, units = 'in', res = 300)
+#png('figures/words_as_predictors/permutation_train_anx.PNG', width = 10, height = 12, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_train_anx.svg', width = 10, height = 12)
 anx_holdout
 dev.off()
 
@@ -602,11 +610,12 @@ depr_train <- features_df %>%
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
-  theme(axis.text.y = element_text(size=8,hjust=1),axis.title.y=element_text(size=14)) +
   geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation) < 0.01'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
   coord_flip() + 
-  annotation_custom(grobTree(textGrob("p(permutation) < 0.01", x=0.8,  y=0.05, hjust=0,
-  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
+  theme(text = element_text(size=16)) + 
+  scale_y_continuous(breaks = c(-0.01, 0.00, 0.01, 0.02, 0.03, 0.04))
+  #annotation_custom(grobTree(textGrob("p(permutation) < 0.01", x=0.8,  y=0.05, hjust=0,
+  #gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
 
   depr_holdout <- features_df %>% 
   filter(target=='Depression') %>% 
@@ -621,11 +630,13 @@ depr_train <- features_df %>%
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
-  theme(axis.text.y = element_text(size=12,hjust=1),axis.title.y=element_text(size=14)) +
+  #theme(axis.text.y = element_text(size=12,hjust=1),axis.title.y=element_text(size=14)) +
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation < 0.05'),hjust=1, vjust=-1,inherit.aes = FALSE)  + 
-  coord_flip() + 
-  annotation_custom(grobTree(textGrob("p(permutation) < 0.05", x=0.8,  y=0.05, hjust=0,
-  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
+  coord_flip()   +
+  theme(text = element_text(size=16)) + 
+  scale_y_continuous(breaks = c(-0.02, -0.01, 0.00, 0.01, 0.02, 0.03))
+  #annotation_custom(grobTree(textGrob("p(permutation) < 0.05", x=0.8,  y=0.05, hjust=0,
+  #gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
 
 #depr_train + depr_holdout  + plot_annotation(
 #  title = 'Feature Importance of Words in Significant Models predicting Depression',
@@ -644,11 +655,13 @@ anx_train <- features_df %>%
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
-  theme(axis.text.y = element_text(size=7.5,hjust=1),axis.title.y=element_text(size=14)) +
+  #theme(axis.text.y = element_text(size=7.5,hjust=1),axis.title.y=element_text(size=14)) +
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation) < 0.01'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
   coord_flip() + 
-  annotation_custom(grobTree(textGrob("p(permutation) < 0.01", x=0.8,  y=0.05, hjust=0,
-  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic")))) 
+  theme(text = element_text(size=11.5)) + 
+  scale_y_continuous(breaks = c(-0.01, 0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07))
+  #annotation_custom(grobTree(textGrob("p(permutation) < 0.01", x=0.8,  y=0.05, hjust=0,
+  #gp=gpar(col="darkslateblue", fontsize=12, fontface="italic")))) 
 
 anx_holdout <- features_df %>% 
   filter(target=='Anxiety') %>% 
@@ -663,29 +676,35 @@ anx_holdout <- features_df %>%
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (Accuracy)', title = '') +
-  theme(axis.text.y = element_text(size=12,hjust=1),axis.title.y=element_text(size=14)) +
+  #theme(axis.text.y = element_text(size=12,hjust=1),axis.title.y=element_text(size=14)) +
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'p(permutation) < 0.05'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
-  coord_flip() + 
-  annotation_custom(grobTree(textGrob("p(permutation) < 0.05", x=0.8,  y=0.05, hjust=0,
-  gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
+  coord_flip()  + 
+  theme(text = element_text(size=16)) + 
+  scale_y_continuous(breaks = c(-0.01, 0.00, 0.01, 0.02, 0.03, 0.04, 0.05))
+  #annotation_custom(grobTree(textGrob("p(permutation) < 0.05", x=0.8,  y=0.05, hjust=0,
+  #gp=gpar(col="darkslateblue", fontsize=12, fontface="italic"))))
 
 #anx_train + anx_holdout  + plot_annotation(
 #  title = 'Feature Importance of Words in Significant Models predicting Anxiety',
 #  subtitle = '')
 
-png('figures/words_as_predictors/permutation_importance_deprtrain.png', width = 10, height = 12, units = 'in', res = 300)
+#png('figures/words_as_predictors/permutation_importance_deprtrain.png', width = 10, height = 12, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_importance_deprtrain.svg', width = 10, height = 16)
 depr_train
 dev.off()
 
-png('figures/words_as_predictors/permutation_importance_deprholdout.png', width = 10, height = 8, units = 'in', res = 300)
+#png('figures/words_as_predictors/permutation_importance_deprholdout.png', width = 10, height = 8, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_importance_deprholdout.svg', width = 10, height = 8)
 depr_holdout
 dev.off()
 
-png('figures/words_as_predictors/permutation_importance_anxtrain.png', width = 10, height = 17, units = 'in', res = 300)
+#png('figures/words_as_predictors/permutation_importance_anxtrain.png', width = 10, height = 17, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_importance_anxtrain.svg', width = 10, height = 18)
 anx_train
 dev.off()
 
-png('figures/words_as_predictors/permutation_importance_anxholdout.png', width = 10, height = 10, units = 'in', res = 300)
+#png('figures/words_as_predictors/permutation_importance_anxholdout.png', width = 10, height = 10, units = 'in', res = 300)
+svglite('figures/words_as_predictors/permutation_importance_anxholdout.svg', width = 10, height = 10)
 anx_holdout
 dev.off()
 
@@ -769,6 +788,9 @@ hep <- round(partial.r(data = ku,
                  )
              ,1)
 
+#making the size dependent on the number of words
+size = 32*length(best_features_target)*0.01
+
 #making the correlation plot
 plot <- ggcorrplot(hep,
            hc.order = TRUE,
@@ -776,8 +798,9 @@ plot <- ggcorrplot(hep,
            outline.color = "white",
            ggtheme = ggplot2::theme_minimal,
            lab = TRUE,
+           lab_size = 3.5,
            show.legend = FALSE, 
-           #tl.cex = 200/length(best_features_target),
+           #tl.cex = size,
            colors = c("#6D9EC1", "white", "#E46726")) #+
   #labs(title = paste(group_n, 'with target', target_n)) + 
   #theme(plot.title = element_text(size=18))
@@ -786,7 +809,7 @@ plot <- ggcorrplot(hep,
 plot_list[[i]] = plot
 
 #saving the ggplot as a png
-filename = paste0("figures/words_as_predictors/correlation_matrix/", group_n, target_n, ".png")
+filename = paste0("figures/words_as_predictors/correlation_matrix/", group_n, target_n, ".svg")
 
 #saving plots in different sizes to make them all readable  
 #case_when(target_n == 'Anxiety' & group_nr == 'Group 6' ~ png(filename, width = 15, height = 15, units = 'in', res = 300),
@@ -794,10 +817,9 @@ filename = paste0("figures/words_as_predictors/correlation_matrix/", group_n, ta
 #          TRUE ~ png(filename, width = 10, height = 10, units = 'in', res = 300))
 
 
-#making the size dependent on the number of words
-size = 40*length(best_features_target)*0.01
   
-png(filename, width = size, height = size, units = 'in', res = 300)
+#png(filename, width = size, height = size, units = 'in', res = 300)
+svglite(filename, width = size, height = size)
 
 print(plot_list[[i]])
 dev.off()

@@ -7,7 +7,7 @@ output: html_document
 
 We load Libraries
 ```{r}
-pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx, lme4, textdata, textstem, geomtextpath, ggcorrplot)
+pacman::p_load(tidyverse, wesanderson, patchwork, psych, xlsx, lme4, textdata, textstem, geomtextpath, ggcorrplot, svglite)
 ```
 
 We define a color palette for plots
@@ -791,13 +791,13 @@ anx_feature_importance <- tibble(
 depr_train <- depr_feature_importance %>% 
   ggplot() +
   aes(x = reorder(feature_name, feature_importance_train), y = feature_importance_train) +
-  geom_bar(aes(fill = direction), stat = 'identity', width = 0.5) +
+  geom_bar(aes(fill = direction), stat = 'identity', width = 0.47) +
   geom_errorbar(aes(ymin=feature_importance_train-std_train, ymax=feature_importance_train+std_train), width=.15) +
   scale_fill_manual(values = color_palette) +
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (R2)') +
-  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) + 
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.8), axis.title.y=element_text(size=24, vjust=1.5), axis.text.y = element_text(size=18)) + 
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
   scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
                      limits = c(0, 0.22))
@@ -805,13 +805,13 @@ depr_train <- depr_feature_importance %>%
 depr_holdout <- depr_feature_importance %>% 
   ggplot() +
   aes(x = reorder(feature_name, feature_importance_holdout), y = feature_importance_holdout) +
-  geom_bar(aes(fill = direction), stat = 'identity', width = 0.5) +
+  geom_bar(aes(fill = direction), stat = 'identity', width = 0.47) +
   geom_errorbar(aes(ymin=feature_importance_holdout-std_holdout, ymax=feature_importance_holdout+std_holdout), width=.15) +
   scale_fill_manual(values = color_palette) + 
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (R2)') +
-  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) +  
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.8), axis.title.y=element_text(size=24, vjust=1.5), axis.text.y = element_text(size=18)) +  
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) +
   scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
                      limits = c(0, 0.22))# +
@@ -829,7 +829,7 @@ anx_train <-anx_feature_importance %>%
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (R2)') +
-  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) +  
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.8), axis.title.y=element_text(size=24, vjust=1.5), axis.text.y = element_text(size=18)) +  
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) + 
   scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
                      limits = c(-0.05, 0.22))
@@ -844,7 +844,7 @@ anx_holdout <-anx_feature_importance %>%
   theme_minimal() + 
   theme(legend.position='none') +
   labs(x='', y = 'Feature Importance (R2)') +
-  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.5), axis.title.y=element_text(size=24), axis.text.y = element_text(size=18)) + 
+  theme(axis.text.x = element_text(angle = 30,size=24,vjust=0.8), axis.title.y=element_text(size=24, vjust=1.5), axis.text.y = element_text(size=18)) + 
   #geom_text(mapping = aes(x = Inf, y = -Inf, label = 'blablabla'),hjust=1, vjust=-1,inherit.aes = FALSE) +
   scale_y_continuous(breaks = c(-0.05, 0.00, 0.05, 0.10, 0.15, 0.20),
                      limits = c(-0.05, 0.22))# +
@@ -865,19 +865,23 @@ anx_holdout <-anx_feature_importance %>%
 #dev.off()
 
 
-png('figures/lexicon_analysis/feature_importance_depr_train.png', width = 10, height = 10, units = 'in', res = 300)
+#png('figures/lexicon_analysis/feature_importance_depr_train.png', width = 10, height = 10, units = 'in', res = 300)
+svglite('figures/lexicon_analysis/feature_importance_depr_train.svg', width = 10, height = 10)
 depr_train
 dev.off()
 
-png('figures/lexicon_analysis/feature_importance_depr_holdout.png', width = 10, height = 10, units = 'in', res = 300)
+#png('figures/lexicon_analysis/feature_importance_depr_holdout.png', width = 10, height = 10, units = 'in', res = 300)
+svglite('figures/lexicon_analysis/feature_importance_depr_holdout.svg', width = 10, height = 10)
 depr_holdout
 dev.off()
 
-png('figures/lexicon_analysis/feature_importance_anx_train.png', width = 10, height = 10, units = 'in', res = 300)
+#png('figures/lexicon_analysis/feature_importance_anx_train.png', width = 10, height = 10, units = 'in', res = 300)
+svglite('figures/lexicon_analysis/feature_importance_anx_train.svg', width = 10, height = 10)
 anx_train
 dev.off()
 
-png('figures/lexicon_analysis/feature_importance_anx_holdout.png', width = 10, height = 10, units = 'in', res = 300)
+#png('figures/lexicon_analysis/feature_importance_anx_holdout.png', width = 10, height = 10, units = 'in', res = 300)
+svglite('figures/lexicon_analysis/feature_importance_anx_holdout.svg', width = 10, height = 10)
 anx_holdout
 dev.off()
 ```

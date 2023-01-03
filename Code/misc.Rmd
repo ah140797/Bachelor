@@ -7,7 +7,7 @@ output: html_document
 
 We load Libraries
 ```{r}
-pacman::p_load(tidyverse, wesanderson, patchwork, ggcorrplot, tidytext, kableExtra, see, correlation, psych, ggridges, sjmisc, mctest, grid, flextable)
+pacman::p_load(tidyverse, wesanderson, patchwork, ggcorrplot, tidytext, kableExtra, see, correlation, psych, ggridges, sjmisc, mctest, grid, flextable, svglite)
 ```
 
 # Tables of all words
@@ -55,7 +55,7 @@ for (group_nr in seq(1,8,1)){
   bg(i = ~ d$color_code == 'yellow', j = names(d), bg = wes_palette('GrandBudapest1')[[4]]) %>% 
   theme_vanilla()
   #saving
-  save_as_image(t, path = paste0('figures/all_words/',group_nr, target_n, '.png'), webshot = 'webshot')
+  #save_as_image(t, path = paste0('figures/all_words/',group_nr, target_n, '.png'), webshot = 'webshot')
     
   print(t)
 }

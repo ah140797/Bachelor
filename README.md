@@ -1,6 +1,6 @@
-# Bachelor Project 
+# Mapping Individual Semantic Spaces using the Demonstrative Choice Task
 
-Here you find the accompanying code for the for my Bachelor project in the autumn of 2022 at the University of Aarhus.
+Here you find the accompanying code for the for my **Bachelor thesis** in the autumn of 2022 at the University of Aarhus.
 
 ## Project Description
 
@@ -10,10 +10,12 @@ The bulk of the analysis is conducted in Python using scikit-learn.
 
 ## Repository Structure
 
-* The project report can be found under the filename *blablabla*
-* Code can be found in the folder *Code/*
-* Figures can be found in *Code/figures/*
-* Data can be found in *Code/Data/*
+* The project report can be found as: *thesis.pdf*
+* Code can be found in the folder: *Code/*
+* Figures can be found in: *Code/figures/*
+* Data can be found in: *Code/Data/*
+* The Latex script can be found as: *main.tex*
+* The literature can be found as BibTex: literature.bib
 
 ## Scripts
 

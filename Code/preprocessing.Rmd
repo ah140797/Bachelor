@@ -365,8 +365,8 @@ data_long <- data %>%
                                #PHQ9<14 | PHQ9>2 ~ 2), #if you want more levels of depression
          Depressed = as.factor(Depressed),
          Depressed = fct_relevel(Depressed, '1','0'),
-         Anxiety = case_when(GAD7>8 ~ 1,
-                             GAD7<= 8 ~ 0),
+         Anxiety = case_when(GAD7>=8 ~ 1,
+                             GAD7< 8 ~ 0),
          Anxiety = as.factor(Anxiety),
          Anxiety = fct_relevel(Anxiety, '1','0'),
          Dem = as.factor(Dem),
