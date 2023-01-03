@@ -1,6 +1,6 @@
 # Mapping Individual Semantic Spaces using the Demonstrative Choice Task
 
-Here you find the accompanying code for the for my **Bachelor thesis** in the autumn of 2022 at the University of Aarhus.
+Here you find the accompanying code for my **Bachelor thesis** in the autumn of 2022 at the University of Aarhus.
 
 ## Project Description
 
