@@ -15,7 +15,7 @@ The bulk of the analysis is conducted in Python using scikit-learn.
 * Figures can be found in: *Code/figures/*
 * Data can be found in: *Code/Data/*
 * The Latex script can be found as: *main.tex*
-* The literature can be found as BibTex: literature.bib
+* The literature can be found as BibTex: *literature.bib*
 
 ## Scripts
 
